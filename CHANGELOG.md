@@ -4,6 +4,18 @@ All notable changes to scaffold-factory are documented here. Format loosely foll
 
 ## [Unreleased]
 
+## [0.4.7] — 2026-04-18
+
+Pin bump to consume the hardening wave shipped alongside scaffold-factory v0.4.6. No scaffold.py logic changes; 106 pytest tests still pass.
+
+### Changed
+- **Registry pin** `base-next-starter@v0.1.9` → `@v0.1.10`. v0.1.10 ships:
+  - **Critical fix**: firebase/custom stub providers now redirect protected routes to `/sign-in` at the proxy layer and return `null`/redirect from the server stubs, matching the clerk/supabase graceful-no-config pattern. Previously these stubs crashed `/dashboard` with a 500 via unhandled `NOT_CONFIGURED` throws.
+  - Stale `src/modules/` path references swept from user-visible UI (firebase/custom components) and console warnings.
+  - Dead code removed (`SignInInput`, `SignUpInput`, `AuthResult` never imported; duplicate `export const config` in clerk proxy).
+  - Clerk `toUser` input type now derived from `currentUser()` return type.
+- **Registry pin** `kmp-starter-project@v0.1.2` → `@v0.1.3`. v0.1.3 adds a `com.example.kmpstarterproject` → `{{bundle_id}}` placeholder so iOS `PRODUCT_BUNDLE_IDENTIFIER` in `Config.xcconfig` actually gets renamed. Previously every scaffolded iOS app shipped with the demo bundle ID — missed by all three existing placeholders because the string is lowercase + no underscore.
+
 ## [0.4.6] — 2026-04-17
 
 Security hardening pass. No breaking API changes. 96 → 106 pytest tests.
