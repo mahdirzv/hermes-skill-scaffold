@@ -1,49 +1,61 @@
 # Command Grammar
 
-The scaffold workflow uses a small explicit grammar. The skill routes these commands; the scripts do the deterministic work.
+The scaffold workflow uses a small explicit grammar. The skill routes these commands; `scripts/scaffold.py` does the deterministic work.
 
-## Create
+## `create` — resolve and apply in one pass (primary command)
 
 ```bash
-scaffold.py create <stack> <name> \
+python3 scripts/scaffold.py create <stack> <name> --dest <path> \
   [--registry PATH] \
-  [--dest PATH] \
+  [--cache-dir PATH] \
   [--package-prefix com.example] \
   [--bundle-prefix com.example] \
-  [--auth-provider PROVIDER] \
-  [--theme-preset PRESET] \
-  [--room] [--github] [--ci] \
+  [--auth-provider clerk|supabase|...] \
+  [--theme-preset neutral|vivid|...] \
+  [--room] [--ci] [--github] \
   [--no-auth] [--no-theme] \
+  [--pack <extra_pack_id>]... \
   [--plan-out plan.json] \
-  [--run-verify]
+  [--force] [--skip-verify] [--refresh-cache]
 ```
 
-## Resolve
+## `resolve` — print the JSON plan, do not touch files
 
 ```bash
-scaffold.py resolve <stack> <name> [same flags as create]
+python3 scripts/scaffold.py resolve <stack> <name> [same flags as create]
 ```
 
-Outputs the resolved plan as JSON.
-
-## Apply
+## `apply` — run a previously-resolved plan against a destination
 
 ```bash
-scaffold.py apply --plan plan.json --dest PATH [--force] [--run-verify]
+python3 scripts/scaffold.py apply --plan plan.json --dest <path> \
+  [--force] [--skip-verify] [--refresh-cache]
 ```
+
+## Stacks
+
+- `kmp` — Kotlin Multiplatform (Compose MP, Android/iOS/JVM)
+- `nextjs` — Next.js 16 App Router
 
 ## Defaults
 
-- `stack`: `kmp` or `nextjs`
-- `package-prefix`: `com.example`
-- `auth-provider`: registry stack default, else `clerk`
-- `theme-preset`: registry stack default, else `neutral`
-- auth/theme packs are included by default unless explicitly disabled
+- `--package-prefix`: `com.example`
+- `--auth-provider`: registry `stack_defaults[stack].auth_provider` (fallback `clerk`)
+- `--theme-preset`: registry `stack_defaults[stack].theme_preset` (fallback `neutral`)
+- auth + theme packs included by default; pass `--no-auth` / `--no-theme` to skip
+- build verification runs by default; pass `--skip-verify` to opt out
 
-## Convention
+## Pack conventions
 
-Pack ids are derived from the stack name:
-- `kmp_base`, `kmp_auth`, `kmp_ui_theme`, `kmp_room`, `kmp_github`, `kmp_ci`
-- `nextjs_base`, `nextjs_auth`, `nextjs_ui_theme`, `nextjs_room`, `nextjs_github`, `nextjs_ci`
+Pack ids follow `<stack>_<name>`:
 
-Registry entries should keep that naming pattern unless there is a strong reason not to.
+- KMP: `kmp_base`, `kmp_auth`, `kmp_ui_theme`, `kmp_room`, `kmp_github`, `kmp_ci`
+- Next.js: `nextjs_base`, `nextjs_auth`, `nextjs_ui_theme`, `nextjs_ci`, `nextjs_github`
+
+The starter's `.scaffold.json` maps each pack name (without the stack prefix) to either:
+- `paths: [...]` — directories/files to delete when unselected (subtractive)
+- Or is referenced indirectly via `env_file.set` (Next.js auth/theme packs)
+
+## Cache
+
+Cloned starters live under `~/.cache/hermes-skill-scaffold/<cache-key>/`. Re-runs reuse the cache. Use `--refresh-cache` to force a fresh clone.

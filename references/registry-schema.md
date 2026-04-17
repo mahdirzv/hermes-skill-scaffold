@@ -1,90 +1,109 @@
 # Registry Schema
 
-This file defines the canonical registry structure for the project scaffolding workflow.
+Two files, two purposes:
 
-## Purpose
-The registry is the source of truth for:
-- base templates
-- optional packs
-- dependencies and conflicts
-- placeholder substitutions
-- post-steps
-- verification commands
+| File | Lives in | Purpose |
+|---|---|---|
+| `references/registry.json` | skill repo | Points at pinned starter tags; declares stack defaults and pack ids |
+| `.scaffold.json` | each starter repo | Declares how to rename and prune the starter |
 
-## Top-level shape
+## `registry.json`
 
-```json
+```jsonc
 {
+  "version": "0.1.0",                       // registry version for traceability
+  "min_scaffold_py_version": "0.1.0",       // script will refuse older versions
+
   "stack_defaults": {
-    "kmp": {
-      "auth_provider": "clerk",
-      "theme_preset": "neutral"
-    }
+    "<stack>": { "auth_provider": "...", "theme_preset": "..." }
   },
-  "packs": []
+
+  "packs": [
+    {
+      "id":   "<stack>_base",               // required
+      "stack": "kmp" | "nextjs",            // required
+      "kind":  "base" | "feature" | "infra",// required
+      "source": "git+<url>@<ref>[#<subpath>]" | "/absolute" | "$ENV_VAR" | "relative",
+      "requires":        ["<other_id>"],    // selected together, or fail
+      "conflicts_with":  ["<other_id>"],    // cannot coexist
+      "placeholder_map": { "key": "value" },// merged into the plan's placeholders
+      "verify":          ["cmd", ["cmd", "arg"]]  // run in $DEST after apply
+    }
+  ]
 }
 ```
 
-## Entry schema
+Feature/infra packs typically only need `id`, `stack`, and `kind`. The starter's own `.scaffold.json` decides what happens when each pack is selected or not.
 
-```yaml
-id: kmp_base
-stack: kmp
-kind: base # base | feature | infra
-source: /absolute/path/or/git-url
-requires: []
-conflicts_with: []
-owns:
-  - composeApp/**
-  - shared/**
-placeholder_map:
-  project_name: MyApp
-  package_name: com.example.myapp
-  package_path: com/example/myapp
-  kmp_auth_include: ""
-post_steps:
-  - ./gradlew :shared:build
-  - ./gradlew :composeApp:build
-verify:
-  - test -f local.properties || printf 'sdk.dir=/path/to/sdk\n' > local.properties
-  - ./gradlew :shared:build
-  - ./gradlew :composeApp:build
+### `source` resolution order
+
+1. `git+<url>@<ref>[#<subpath>]` → shallow-clone into `~/.cache/hermes-skill-scaffold/`
+2. `$ENV_VAR` → read an absolute path from the environment
+3. Absolute path → used as-is
+4. Relative path → resolved against the registry file's directory
+
+## `.scaffold.json` (in each starter repo)
+
+```jsonc
+{
+  "scaffold_schema_version": "1",
+  "stack": "kmp" | "nextjs",
+  "description": "...",
+
+  "placeholders": [
+    { "find": "LITERAL_STRING_IN_REPO", "replace_with": "{{template_key}}" }
+  ],
+
+  // Optional: generate an env file (Next.js style provider selection)
+  "env_file": {
+    "template": ".env.example",
+    "output":   ".env.local",
+    "set":      { "KEY": "{{template_key}}" }
+  },
+
+  // Pack map — keys are pack names (no stack prefix)
+  "packs": {
+    "<name>": {
+      "paths":                         ["relative/path/to/delete/if/unselected"],
+      "settings_gradle_include_line":  "include(\":module\")"
+    }
+  }
+}
 ```
 
-## Registry rules
-- One base per scaffold.
-- Packs must declare all files they own.
-- `owns` is a list of relative glob patterns from the source root; the script only copies matching files.
-- Packs must declare all required dependencies.
-- Conflicts must be explicit.
-- Verification commands must be runnable from the project root.
-- All placeholders must be deterministic and documented.
-- `placeholder_map` keys are generic: `{{key}}` can be used in file contents and copied relative paths.
-- Keep optional include placeholders blank in the base entry and let selected packs fill them.
-- The registry should not contain prose-only advice; keep it machine-readable.
+### Placeholder rules
 
-## Suggested stack entries
+- `find` is a literal substring (no regex).
+- `replace_with` is a template containing `{{keys}}` expanded against the plan's merged placeholder map.
+- Both file **contents** AND file **paths** (POSIX relpath) are searched. A find string of `com/example/foo` will relocate nested files.
+- Longest `find` runs first, so overlapping strings don't collide.
+- Strings that look like path separators (`/`) should be declared separately from dotted forms (`.`).
 
-### KMP base
-- `kmp_base`
-- `kmp_auth`
-- `kmp_ui_theme`
-- `kmp_room`
-- `kmp_github`
-- `kmp_ci`
+### Subtractive packs (KMP model)
 
-### Next.js base
-- `nextjs_base`
-- `nextjs_auth`
-- `nextjs_ui_theme`
-- `nextjs_github`
-- `nextjs_ci`
+When a pack is NOT selected:
+- Its `paths` are deleted from `$DEST`.
+- Its `settings_gradle_include_line` is stripped from `settings.gradle.kts` (if present).
 
-## Naming conventions
-- Use snake_case for registry ids.
-- Use lower-case stack names.
-- Keep placeholder names stable across stacks.
-- Keep verification commands minimal and deterministic.
+### Env-file packs (Next.js model)
 
-## Next step
-Create the resolver script that reads this registry and returns the ordered scaffold plan.
+For provider-style feature flags, the `env_file` block writes `.env.local` with the requested `AUTH_PROVIDER` / `THEME_PRESET` values and leaves all other keys from `.env.example` intact.
+
+## Template key reference
+
+Built by `scaffold.py build_identifiers()`:
+
+| Key | Example (name=`PlateTracker`, prefix=`com.rzv`) |
+|---|---|
+| `project_name`      | `PlateTracker` |
+| `project_slug`      | `platetracker` |
+| `project_root_name` | `PlateTracker` |
+| `package_name`      | `com.rzv.platetracker` |
+| `package_path`      | `com/rzv/platetracker` |
+| `package_prefix`    | `com.rzv` |
+| `bundle_id`         | `com.rzv.platetracker` |
+| `folder_name`       | `platetracker` |
+| `auth_provider`     | (from flag / stack default) |
+| `theme_preset`      | (from flag / stack default) |
+
+These are always available to every starter's `.scaffold.json` without declaration.

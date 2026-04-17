@@ -1,132 +1,143 @@
 ---
-name: project-scaffolding-with-skills-and-mcp
-description: Design or implement reusable project-scaffolding workflows for KMP or Next.js using Skills, MCP, template registries, and deterministic module packs. Use when creating a project factory that copies/clones a base repo and optional modules like auth, UI/theming, Room, GitHub, or CI without reinventing structure.
+name: project-scaffold-factory
+description: Scaffold new KMP or Next.js projects from canonical GitHub starter repos plus optional packs (auth, UI/theming, Room, CI, GitHub). Use when the user asks to create a new KMP or Next.js project, bootstrap an app from a starter, or generate a ready-to-build project. Never invents architecture — shallow-clones pinned starter tags and applies deterministic find/replace substitution declared by the starter's own .scaffold.json manifest.
 ---
 
-# Project Scaffolding with Skills and MCP
+# Project Scaffold Factory
 
-Use this skill when building a project factory that must stay fast, deterministic, and easy for weaker models to operate.
+Use this skill to create a new KMP or Next.js project from a pinned, versioned starter repo. The goal is **assembly, not invention**: the model routes the request; a Python script does all file work.
 
-## Core model
-- Skill = routing and policy
-- MCP = external tools/data integration
-- Registry = source of truth for available templates/modules
-- Script = deterministic copy/rename/verify execution
+## Core flow
 
-## Default architecture
-1. Keep one thin router skill.
-2. Keep stack/module truth in a registry.
-3. Keep code structure in canonical templates.
-4. Use scripts for file operations and validation.
-5. Use MCP only for real integrations like filesystem, GitHub, or remote registries.
+```
+User: "create kmp MyApp --auth --ui --room"
+  ↓
+scaffold.py resolve  → build a plan (pinned sources, selected packs, placeholders)
+scaffold.py apply    → shallow-clone starter to ~/.cache/, copy to $DEST,
+                       subtractive-prune unselected packs, find/replace,
+                       generate .env.local (Next.js) or local.properties (KMP),
+                       run build verification
+  ↓
+Ready-to-build project at $DEST
+```
+
+## Command
+
+```bash
+python3 scripts/scaffold.py create <stack> <name> --dest <path> [flags]
+```
+
+- **stack** — `kmp` or `nextjs`
+- **name** — project name (gets slugified, humanized, and compacted into package identifiers)
+- **--package-prefix** — dotted prefix for Kotlin/Android package, e.g. `com.rzv` (default `com.example`)
+- **--auth-provider** — override default (Next.js: `clerk` | `supabase`)
+- **--theme-preset** — override default (`neutral` | `vivid`)
+- **--room** — include Room data pack (KMP only)
+- **--ci** — keep `.github/workflows/` from the starter
+- **--no-auth**, **--no-theme** — skip default packs
+- **--skip-verify** — skip the build gate (default: build is mandatory)
+- **--force** — allow non-empty destination
+- **--refresh-cache** — re-clone the starter even if cached
+
+See `references/command-grammar.md` for the full flag set.
+
+## Architecture
+
+- **Skill = router & policy** (this file + `references/`)
+- **Registry = source of truth for pinned starters** (`references/registry.json`)
+- **Script = deterministic execution** (`scripts/scaffold.py`)
+- **Starter repos = canonical templates** (remote, pinned via `git+<url>@<tag>`)
+- **Starter's `.scaffold.json` = self-describes its placeholders and packs**
 
 ## Rules
-- One stack per command path.
-- One default auth provider per generated project.
-- One default theme preset per generated project.
-- Optional packs must be explicit flags.
-- Never let the model invent structure from scratch if a template or module exists.
-- Never hide a large opaque workflow behind one mega-tool.
-- Build verification is mandatory before handoff.
 
-## Recommended module packs
-- Base KMP template
-- Base Next.js template
-- Auth pack
-- UI/theming pack
-- Room/data pack
-- GitHub/CI pack
+- One stack per command.
+- One base starter per scaffold.
+- Optional packs must be explicit flags (or defaults declared in the registry).
+- Build verification is mandatory unless `--skip-verify` is passed.
+- Never hand-write project structure if the starter already has it.
+- Never rewrite project files with the LLM — the script does find/replace.
+- Sources are pinned: registry entries use `git+<url>@<tag>`, not floating branches.
 
-## Implementation order
-1. Define the registry schema and canonical template locations.
-2. Add deterministic resolver and pack-applier scripts.
-3. Add build/test verification gates for KMP and Next.js.
-4. Wire the thin skill to the registry and scripts.
-5. Add GitHub/CI integrations behind explicit flags.
-6. Verify the full flow end-to-end on both starter projects.
+## Starter repos
 
-Deterministic script layer:
-- `scripts/scaffold.py` resolves, applies, or creates a scaffold end-to-end
-- `templates/` holds clean local scaffold roots when the live starter repo needs base-vs-pack separation
-- `references/command-grammar.md` documents the supported CLI shape
-- `references/example-registry.json` provides a machine-readable registry seed
-- `references/local-starter-registry.json` points the same registry shape at the current local KMP and Next.js starter roots
-- Scripts only substitute explicit `{{...}}` placeholders in file contents and copied relative paths; do not globally replace bare env names or prose tokens
+Two canonical remotes, each declares its own `.scaffold.json`:
 
-See the implementation plan note in Obsidian: [[skills-mcp-project-scaffolding-implementation-plan]].
+| Stack | Repo | Pack selection model |
+|---|---|---|
+| KMP | `github.com/mahdirzv/kmp-starter-project` | Subtractive: base includes `kmp/{auth,room_data,ui_theme}`; unselected packs are deleted and their `include(...)` line stripped from `settings.gradle.kts`. |
+| Next.js | `github.com/mahdirzv/base-next-starter` | Env-driven: providers live in `src/modules/auth/providers/`; `.env.local` is generated from `.env.example` with `AUTH_PROVIDER` and `THEME_PRESET` set from flags. |
 
-## Registry fields to define
-- id
-- stack
-- kind (base, feature, infra)
-- source
-- requires
-- conflicts_with
-- owns
-- placeholder_map
-- post_steps
-- verify
+## Registry shape
 
-## Scaffolding flow
-1. Parse stack and flags.
-2. Resolve base template.
-3. Resolve optional packs.
-4. Apply in fixed order.
-5. Replace placeholders.
-6. Run build/test.
-7. Stop on failure.
-8. If requested, create/push GitHub repo and add CI.
-9. Return a short status summary.
+```json
+{
+  "version": "0.1.0",
+  "min_scaffold_py_version": "0.1.0",
+  "stack_defaults": {
+    "kmp":    { "auth_provider": "clerk", "theme_preset": "neutral" },
+    "nextjs": { "auth_provider": "clerk", "theme_preset": "neutral" }
+  },
+  "packs": [
+    {
+      "id": "kmp_base",
+      "stack": "kmp",
+      "kind": "base",
+      "source": "git+https://github.com/mahdirzv/kmp-starter-project@v0.1.0",
+      "verify": ["./gradlew --no-daemon build"]
+    },
+    { "id": "kmp_auth", "stack": "kmp", "kind": "feature" },
+    ...
+  ]
+}
+```
 
-## Good defaults
-- KMP: auth, UI, Room, CI as separate packs
-- Next.js: auth, UI, CI as separate packs
-- Theme should use tokens/constants, not hardcoded colors.
-- Auth should use one provider implementation behind an interface.
-- Room/data should stay isolated from UI.
+Feature packs do not need `source` — they reference paths inside the base that are pruned or kept based on selection. The subtractive mapping lives in the starter's `.scaffold.json`.
 
-## Validation
-A scaffold is only done if:
-- expected files exist
-- names are correct
-- build passes
-- selected packs are wired
-- GitHub/CI steps succeeded if requested
+## Starter manifest (`.scaffold.json`)
 
-Portable Android SDK detection (KMP):
-- `apply_plan()` automatically finds the Android SDK via `resolve_android_sdk()` (env vars: `ANDROID_HOME`, `ANDROID_SDK_ROOT`, `ANDROID_SDK`, then common macOS/Linux paths).
-- If `local.properties` does not already exist, it is written with `sdk.dir=<detected_path>`.
-- This makes the scaffold portable across developer machines without hardcoding SDK paths.
-- CI systems that generate their own `local.properties` (e.g., via `android-sdk` action) take precedence because the script never overwrites an existing file.
-- Registry `verify` entries for KMP base no longer need a `printf`/`test` step for `local.properties` — that is handled automatically.
+Each starter repo declares how it should be scaffolded:
 
-Portable source path resolution (for use by other agents):
-- Registry `source` entries support four path formats:
-  - **Absolute paths** — used as-is (e.g., `/Users/mahdi/base-next-project/starter`).
-  - **`$ENV_VAR`** — resolved from an environment variable (e.g., `$NEXTJS_TEMPLATE_ROOT`). The env var must be set at runtime.
-  - **`templates/<path>`** — resolved relative to the skill base (e.g., `templates/kmp/base`). KMP pack sources always use this format so they travel with the skill.
-  - **Relative paths** — resolved relative to the registry's parent directory (fallback for non-standard layouts).
-- `apply_plan()` infers the skill base by walking up from the registry path: `<skill>/references/<registry>` → `<skill>`.
-- This means the entire skill (templates + registry) is copy-paste portable to any machine. No hardcoded `/Users/mahdi` paths leak into the registry.
-- For Next.js templates that live outside the skill dir, set `NEXTJS_TEMPLATE_ROOT` env var before running scaffold.
+```json
+{
+  "scaffold_schema_version": "1",
+  "stack": "kmp",
+  "placeholders": [
+    { "find": "com.example.kmp_starter_project", "replace_with": "{{package_name}}" },
+    { "find": "com/example/kmp_starter_project", "replace_with": "{{package_path}}" },
+    { "find": "Kmpstarterproject",               "replace_with": "{{project_root_name}}" }
+  ],
+  "packs": {
+    "auth":     { "paths": ["kmp/auth"],      "settings_gradle_include_line": "include(\":kmp:auth\")" },
+    "room":     { "paths": ["kmp/room_data"], "settings_gradle_include_line": "include(\":kmp:room_data\")" },
+    "ui_theme": { "paths": ["kmp/ui_theme"],  "settings_gradle_include_line": "include(\":kmp:ui_theme\")" },
+    "ci":       { "paths": [".github"] }
+  }
+}
+```
 
-Real-world pitfalls discovered:
-- Keep optional packs in a sibling pack workspace when authoring them, but import/copy that workspace into the target git repo before committing if the repo itself is the deliverable.
-- Registry `source` paths should point at concrete pack roots.
-- `owns` globs must match the final on-disk package layout exactly; a mismatch can silently produce nested duplicate package folders.
-- For KMP packs, prefer compile-safe commonMain code only. Avoid JVM-only APIs in common code unless you provide expect/actual or platform-specific source sets.
-- A successful `resolve` does not guarantee the pack sources compile; always run `create` and a real build on the generated scaffold.
-- When the main repo is clean and the work lives in a sibling non-git workspace, create a feature branch in the parent repo first, import the workspace there, then verify with a build before commit.
-- Template code should stay self-documenting; avoid memo-style comments unless the API contract is genuinely non-obvious.
+Next.js uses `env_file` instead of (or in addition to) path-based packs:
 
-## Anti-patterns
-- Free-form rewrite of project structure
-- Multiple auth providers by default
-- Theme values scattered across screens
-- Room mixed into UI logic
-- One tool that does everything invisibly
-- Skills that duplicate template content instead of referencing it
+```json
+{
+  "env_file": {
+    "template": ".env.example",
+    "output":   ".env.local",
+    "set": { "AUTH_PROVIDER": "{{auth_provider}}", "THEME_PRESET": "{{theme_preset}}" }
+  }
+}
+```
+
+## Failure handling
+
+- Unknown pack id → fail before copy
+- Destination exists and is non-empty → fail (unless `--force`)
+- Build verification fails → fail loudly; project stays on disk for inspection
+- Missing Android SDK → write a commented-out `local.properties` and warn (do not fail)
 
 ## References
-- Keep long module registries, naming rules, and examples in linked files.
-- Keep this skill short and focused on decision rules and workflow.
+
+- `references/registry.json` — the live registry (editable; the authoritative source for pinned tags)
+- `references/command-grammar.md` — all flags
+- `references/registry-schema.md` — registry and `.scaffold.json` field docs
+- `references/design-rationale.md` — why this split (skill/registry/script/starter)

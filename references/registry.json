@@ -1,0 +1,36 @@
+{
+  "version": "0.1.0",
+  "min_scaffold_py_version": "0.1.0",
+  "_note": "Sources pin to scaffold/v0.1.0-prep branch for initial testing. After merging + tagging, change @scaffold/v0.1.0-prep to @v0.1.0 across all entries.",
+  "stack_defaults": {
+    "kmp":    { "auth_provider": "clerk", "theme_preset": "neutral" },
+    "nextjs": { "auth_provider": "clerk", "theme_preset": "neutral" }
+  },
+  "packs": [
+    {
+      "id": "kmp_base",
+      "stack": "kmp",
+      "kind": "base",
+      "source": "git+https://github.com/mahdirzv/kmp-starter-project@scaffold/v0.1.0-prep",
+      "verify": ["./gradlew --no-daemon build"]
+    },
+    { "id": "kmp_auth",     "stack": "kmp", "kind": "feature" },
+    { "id": "kmp_ui_theme", "stack": "kmp", "kind": "feature" },
+    { "id": "kmp_room",     "stack": "kmp", "kind": "feature" },
+    { "id": "kmp_ci",       "stack": "kmp", "kind": "infra"   },
+
+    {
+      "id": "nextjs_base",
+      "stack": "nextjs",
+      "kind": "base",
+      "source": "git+https://github.com/mahdirzv/base-next-starter@scaffold/v0.1.0-prep",
+      "verify": [
+        ["pnpm", "install", "--frozen-lockfile"],
+        ["pnpm", "build"]
+      ]
+    },
+    { "id": "nextjs_auth",     "stack": "nextjs", "kind": "feature" },
+    { "id": "nextjs_ui_theme", "stack": "nextjs", "kind": "feature" },
+    { "id": "nextjs_ci",       "stack": "nextjs", "kind": "infra"   }
+  ]
+}
