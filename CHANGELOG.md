@@ -4,7 +4,8 @@ All notable changes to scaffold-factory are documented here. Format loosely foll
 
 ## [Unreleased]
 
-_No unreleased changes._
+### Changed
+- README install section rewritten: adds a verify step, separates "Updating" as its own sub-section, and documents two sharp edges of the CLI — (a) `claude plugin update <name>` fails with "not found" unless you qualify it as `<name>@<marketplace>`, and (b) a stale marketplace cache can make updates appear to be no-ops until `claude plugin marketplace update <marketplace>` is run first. No code change.
 
 ## [0.4.0] — 2026-04-17
 
