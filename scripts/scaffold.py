@@ -37,7 +37,7 @@ import urllib.parse
 from pathlib import Path, PurePosixPath
 from typing import Any, NoReturn
 
-SCAFFOLD_VERSION = "0.4.7"
+SCAFFOLD_VERSION = "0.4.8"
 SCRIPT_DIR = Path(__file__).resolve().parent
 DEFAULT_REGISTRY = SCRIPT_DIR.parent / "references" / "registry.json"
 DEFAULT_CACHE = Path.home() / ".cache" / "scaffold-factory"
@@ -48,6 +48,12 @@ SKIP_DIRS = {
     ".swiftpm", "build", "coverage", "DerivedData", "dist", "node_modules",
     "xcuserdata", ".turbo",
 }
+
+# Starter manifest (`.scaffold.json`) schema versions this scaffold.py
+# understands. A starter declaring a version not in this set fails with
+# EXIT_STARTER at read time — cheaper than diagnosing cryptic "unexpected
+# structure" errors downstream when a new schema ships.
+SUPPORTED_SCAFFOLD_SCHEMA_VERSIONS: frozenset[str] = frozenset({"1"})
 
 # Provider secret flags: CLI flag name, placeholder key, env-var fallback.
 # Env-var fallback keeps secrets out of shell history when users `export` them.
@@ -455,9 +461,23 @@ def read_starter_manifest(src: Path) -> dict[str, Any]:
     if not p.exists():
         return {}
     try:
-        return json.loads(p.read_text(encoding="utf-8"))
+        manifest = json.loads(p.read_text(encoding="utf-8"))
     except json.JSONDecodeError as e:
         fail_starter(f"invalid .scaffold.json in {src}: {e}")
+    # Validate schema version. A starter declaring a newer version than
+    # scaffold.py understands would otherwise silently misbehave (e.g.
+    # conditional placeholders or per-file matchers added in a v2 schema).
+    # If the field is missing, assume v1 for backwards-compat with starters
+    # predating this check.
+    schema = manifest.get("scaffold_schema_version", "1") if isinstance(manifest, dict) else "1"
+    if str(schema) not in SUPPORTED_SCAFFOLD_SCHEMA_VERSIONS:
+        fail_starter(
+            f"unsupported .scaffold.json schema_version {schema!r} in {src}. "
+            f"This scaffold.py (v{SCAFFOLD_VERSION}) supports: "
+            f"{sorted(SUPPORTED_SCAFFOLD_SCHEMA_VERSIONS)}. "
+            f"Upgrade scaffold-factory or pin the starter to an older tag."
+        )
+    return manifest
 
 
 def collect_post_scaffold_notes(manifest: dict[str, Any], selected_pack_keys: set[str]) -> dict[str, Any]:
@@ -794,93 +814,113 @@ def apply_plan(
     """
     dest = dest.expanduser()
     intended_dest = dest
+    # Track whether *we* created the dest directory this call. If verify fails
+    # (or any later step raises), we should rm it so the next run doesn't hit
+    # "destination already exists and is not empty". Only cleans directories
+    # we ourselves created — never touches a pre-existing dest (which the
+    # --force path is explicitly opting into).
+    we_created_dest = False
     if dry_run:
         import tempfile
         dest = Path(tempfile.mkdtemp(prefix="scaffold-dryrun-"))
         force = True       # our tmp dir is empty, but be defensive
         skip_verify = True  # never run external verify in dry-run
+        we_created_dest = True  # tempdir — always our own
     elif dest.exists() and any(dest.iterdir()) and not force:
         fail_usage(f"destination already exists and is not empty: {dest}")
+    else:
+        we_created_dest = not dest.exists()
     dest.mkdir(parents=True, exist_ok=True)
 
-    registry_base = Path(plan["_registry_path"]).parent
-    if registry_base.name == "references":
-        registry_base = registry_base.parent
-    cache_dir = Path(plan.get("_cache_dir") or DEFAULT_CACHE)
+    try:
+        registry_base = Path(plan["_registry_path"]).parent
+        if registry_base.name == "references":
+            registry_base = registry_base.parent
+        cache_dir = Path(plan.get("_cache_dir") or DEFAULT_CACHE)
 
-    base = plan["base"]
-    # Pre-flight: resolve base source and check it exists BEFORE copying anything
-    base_source = resolve_source_path(base["source"], registry_base, cache_dir, refresh=refresh_cache)
-    if not base_source.exists():
-        fail_starter(f"base source missing after resolve: {base_source}")
+        base = plan["base"]
+        # Pre-flight: resolve base source and check it exists BEFORE copying anything
+        base_source = resolve_source_path(base["source"], registry_base, cache_dir, refresh=refresh_cache)
+        if not base_source.exists():
+            fail_starter(f"base source missing after resolve: {base_source}")
 
-    # Copy whole base tree
-    copy_tree(base_source, dest)
+        # Copy whole base tree
+        copy_tree(base_source, dest)
 
-    # Read the starter's .scaffold.json manifest
-    manifest = read_starter_manifest(dest)
-    if not manifest:
-        warn(f"no .scaffold.json in base {base['id']}; scaffold will only use registry placeholder_map")
+        # Read the starter's .scaffold.json manifest
+        manifest = read_starter_manifest(dest)
+        if not manifest:
+            warn(f"no .scaffold.json in base {base['id']}; scaffold will only use registry placeholder_map")
 
-    # Figure out which packs the user selected (as starter-manifest keys)
-    # Registry ids are like "kmp_auth"; strip the stack prefix to match manifest keys.
-    selected_pack_keys: set[str] = set()
-    stack = plan["stack"]
-    prefix = f"{stack}_"
-    for e in plan["packs"]:
-        key = e["id"][len(prefix):] if e["id"].startswith(prefix) else e["id"]
-        selected_pack_keys.add(key)
+        # Figure out which packs the user selected (as starter-manifest keys)
+        # Registry ids are like "kmp_auth"; strip the stack prefix to match manifest keys.
+        selected_pack_keys: set[str] = set()
+        stack = plan["stack"]
+        prefix = f"{stack}_"
+        for e in plan["packs"]:
+            key = e["id"][len(prefix):] if e["id"].startswith(prefix) else e["id"]
+            selected_pack_keys.add(key)
 
-    # Subtractive prune: delete unselected pack paths and strip include lines
-    removed = prune_unselected_packs(dest, manifest, selected_pack_keys) if manifest else []
+        # Subtractive prune: delete unselected pack paths and strip include lines
+        removed = prune_unselected_packs(dest, manifest, selected_pack_keys) if manifest else []
 
-    # Rewrite find/replace pairs + path renames from the starter manifest
-    placeholder_stats = (
-        apply_starter_placeholders(dest, manifest, plan["placeholder_map"])
-        if manifest else {"changed_files": 0, "renamed_paths": 0, "match_counts": {}}
-    )
-    changed_files = placeholder_stats["changed_files"]
-    renamed_paths = placeholder_stats["renamed_paths"]
+        # Rewrite find/replace pairs + path renames from the starter manifest
+        placeholder_stats = (
+            apply_starter_placeholders(dest, manifest, plan["placeholder_map"])
+            if manifest else {"changed_files": 0, "renamed_paths": 0, "match_counts": {}}
+        )
+        changed_files = placeholder_stats["changed_files"]
+        renamed_paths = placeholder_stats["renamed_paths"]
 
-    # Starter-owned post-scaffold notes (captured BEFORE the manifest is deleted)
-    post_notes = collect_post_scaffold_notes(manifest, selected_pack_keys) if manifest else {}
+        # Starter-owned post-scaffold notes (captured BEFORE the manifest is deleted)
+        post_notes = collect_post_scaffold_notes(manifest, selected_pack_keys) if manifest else {}
 
-    # env_file generation (Next.js)
-    env_written = apply_env_file(dest, manifest, plan["placeholder_map"]) if manifest else None
+        # env_file generation (Next.js)
+        env_written = apply_env_file(dest, manifest, plan["placeholder_map"]) if manifest else None
 
-    # KMP: local.properties
-    sdk_written = None
-    if plan["stack"] == "kmp":
-        sdk_written = write_local_properties(dest)
+        # KMP: local.properties
+        sdk_written = None
+        if plan["stack"] == "kmp":
+            sdk_written = write_local_properties(dest)
 
-    # Remove the manifest from the generated project — it's not part of consumer projects
-    sm = dest / ".scaffold.json"
-    if sm.exists():
-        sm.unlink()
+        # Remove the manifest from the generated project — it's not part of consumer projects
+        sm = dest / ".scaffold.json"
+        if sm.exists():
+            sm.unlink()
 
-    # Verification (on by default)
-    verify_results: list[dict[str, Any]] = []
-    if not skip_verify:
-        verify = base.get("verify", [])
-        for pk in plan["packs"]:
-            for v in pk.get("verify", []) or []:
-                if v not in verify:
-                    verify.append(v)
-        if verify:
-            verify_results = run_verify(verify, cwd=dest)
+        # Verification (on by default)
+        verify_results: list[dict[str, Any]] = []
+        if not skip_verify:
+            verify = base.get("verify", [])
+            for pk in plan["packs"]:
+                for v in pk.get("verify", []) or []:
+                    if v not in verify:
+                        verify.append(v)
+            if verify:
+                verify_results = run_verify(verify, cwd=dest)
 
-    result = {
-        "destination": None if dry_run else str(dest),
-        "changed_files": changed_files,
-        "renamed_paths": renamed_paths,
-        "placeholder_match_counts": placeholder_stats["match_counts"],
-        "removed_packs": removed,
-        "env_file": env_written,
-        "android_sdk": sdk_written,
-        "verify_results": verify_results,
-        "selected_packs": sorted(selected_pack_keys),
-        "post_scaffold_notes": post_notes,
-    }
+        result = {
+            "destination": None if dry_run else str(dest),
+            "changed_files": changed_files,
+            "renamed_paths": renamed_paths,
+            "placeholder_match_counts": placeholder_stats["match_counts"],
+            "removed_packs": removed,
+            "env_file": env_written,
+            "android_sdk": sdk_written,
+            "verify_results": verify_results,
+            "selected_packs": sorted(selected_pack_keys),
+            "post_scaffold_notes": post_notes,
+        }
+    except SystemExit:
+        # Cleanup on any fail_*() during the scaffold body. Only remove the
+        # dest if this invocation created it — never touch a pre-existing dir
+        # the user pointed --dest at (even with --force, a partial overlay
+        # is less bad than destroying what was already there).
+        if we_created_dest and not dry_run:
+            shutil.rmtree(dest, ignore_errors=True)
+            warn(f"cleaned up partially-scaffolded destination: {dest}")
+        raise
+
     if dry_run:
         result["dry_run"] = True
         result["intended_destination"] = str(intended_dest)

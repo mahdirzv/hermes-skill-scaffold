@@ -1,5 +1,5 @@
 {
-  "version": "0.4.7",
+  "version": "0.4.8",
   "min_scaffold_py_version": "0.1.0",
   "_note": "v0.4.7: nextjs base → v0.1.10 (firebase/custom stub providers now redirect protected routes to /sign-in instead of crashing /dashboard with a 500; stale src/modules/ paths swept from user-visible UI and warnings; dead types/exports removed; Clerk toUser type derived from SDK). KMP base → v0.1.3 (iOS PRODUCT_BUNDLE_IDENTIFIER now renamed — Config.xcconfig was shipping with demo `com.example.kmpstarterproject`, missed by every prior scaffold). Tags are immutable — safe to cache indefinitely.",
   "stack_defaults": {
