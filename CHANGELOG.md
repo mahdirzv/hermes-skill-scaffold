@@ -6,6 +6,24 @@ All notable changes to scaffold-factory are documented here. Format loosely foll
 
 _No unreleased changes._
 
+## [0.4.0] — 2026-04-17
+
+Honesty + a real Next.js fix. Closes two dogfooding gaps: Next.js provider dispatch and KMP pack wiring transparency.
+
+### Changed
+- **Next.js starter pin** `base-next-starter@v0.1.1` → `@v0.1.2`. Switching provider is now fully env-driven: `AUTH_PROVIDER=supabase` in `.env.local` swaps both the sign-in/sign-up components AND the root proxy at runtime. No manual code edits needed. Previously, users had to hand-edit `src/modules/auth/index.ts` and `src/proxy.ts` despite comments saying it was env-controlled.
+- **KMP starter pin** `kmp-starter-project@v0.1.0` → `@v0.1.1`. Documentation-only update labelling each optional pack a "reference module" with a wiring checklist in the starter's AGENTS.md.
+
+### Added
+- `print_next_steps()` now prints a per-pack wiring warning when KMP optional packs (`auth`, `room`, `ui_theme`) are kept — explicitly calls out that these packs are NOT auto-wired into composeApp/shared and lists the exact steps to wire each one.
+- SKILL.md + `commands/scaffold.md`: new checklist item instructs the agent to relay the KMP pack warning verbatim to the user.
+
+### Scripts
+- `scaffold.py` version bumped `0.2.0 → 0.4.0` to match plugin manifest.
+
+### Deferred to v0.5.0
+- Full KMP pack cross-target wiring (add android + iOS source sets to each pack, `implementation(projects.kmp.*)` in composeApp, Koin registration in `sharedModules`). Currently the packs target `jvm()` only and cannot be consumed from `composeApp/commonMain`.
+
 ## [0.3.0] — 2026-04-17
 
 Distribution milestone. scaffold-factory is now a first-class Claude Code plugin installable via `claude plugin install` with native version updates.
@@ -79,7 +97,8 @@ First release. Single-skill consolidation + git+-pinned source resolution + subt
 - [mahdirzv/kmp-starter-project@v0.1.0](https://github.com/mahdirzv/kmp-starter-project/releases/tag/v0.1.0)
 - [mahdirzv/base-next-starter@v0.1.0](https://github.com/mahdirzv/base-next-starter/releases/tag/v0.1.0)
 
-[Unreleased]: https://github.com/mahdirzv/scaffold-factory/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/mahdirzv/scaffold-factory/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/mahdirzv/scaffold-factory/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/mahdirzv/scaffold-factory/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/mahdirzv/scaffold-factory/compare/v0.1.1...v0.2.0
 [0.1.1]: https://github.com/mahdirzv/scaffold-factory/compare/v0.1.0...v0.1.1

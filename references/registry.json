@@ -17,7 +17,7 @@
       "id": "kmp_base",
       "stack": "kmp",
       "kind": "base",
-      "source": "git+https://github.com/mahdirzv/kmp-starter-project@v0.1.0",
+      "source": "git+https://github.com/mahdirzv/kmp-starter-project@v0.1.1",
       "verify": [
         "./gradlew --no-daemon build"
       ]
@@ -46,7 +46,7 @@
       "id": "nextjs_base",
       "stack": "nextjs",
       "kind": "base",
-      "source": "git+https://github.com/mahdirzv/base-next-starter@v0.1.1",
+      "source": "git+https://github.com/mahdirzv/base-next-starter@v0.1.2",
       "verify": [
         [
           "pnpm",

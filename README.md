@@ -24,6 +24,8 @@ $ scaffold.py create kmp PlateTracker --dest ./PlateTracker --package-prefix com
 - `local.properties` pointing at your detected Android SDK
 - `./gradlew build` already passed — the scaffold fails if the project doesn't compile
 
+> **Note (v0.4.0):** the KMP optional packs (`kmp/auth`, `kmp/room_data`, `kmp/ui_theme`) ship as **reference modules, not wired dependencies**. The generated project includes them but `composeApp`/`shared` do not import from them by default. See the starter's [AGENTS.md](https://github.com/mahdirzv/kmp-starter-project/blob/main/AGENTS.md#optional-packs--reference-modules-not-wired-dependencies) for how to wire them manually. Full cross-target wiring is planned for v0.5.0. The scaffold's "Next steps" output prints the same note explicitly.
+
 Same flow for Next.js 16:
 
 ```bash

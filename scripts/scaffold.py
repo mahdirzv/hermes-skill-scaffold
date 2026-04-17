@@ -37,7 +37,7 @@ import urllib.parse
 from pathlib import Path, PurePosixPath
 from typing import Any, NoReturn
 
-SCAFFOLD_VERSION = "0.2.0"
+SCAFFOLD_VERSION = "0.4.0"
 SCRIPT_DIR = Path(__file__).resolve().parent
 DEFAULT_REGISTRY = SCRIPT_DIR.parent / "references" / "registry.json"
 DEFAULT_CACHE = Path.home() / ".cache" / "scaffold-factory"
@@ -837,6 +837,25 @@ def print_next_steps(plan: dict[str, Any], result: dict[str, Any]) -> None:
         lines.append("  4. Open iosApp/ in Xcode for iOS")
         lines.append("  5. Push to GitHub (when ready):")
         lines.append(f"       cd {dest} && gh repo create {placeholders.get('project_slug', name.lower())} --source . --push --private")
+
+        # Optional pack caveat — the packs are shipped as reference modules,
+        # not wired dependencies. Warn explicitly so users don't expect
+        # plug-and-play behaviour. Tracked for full wiring in v0.5.0.
+        selected_packs: list[str] = list(result.get("selected_packs") or [])
+        reference_packs = [p for p in selected_packs if p in ("auth", "room", "ui_theme")]
+        if reference_packs:
+            lines.append("")
+            lines.append("⚠ Heads up: the following KMP packs are shipped as REFERENCE modules,")
+            lines.append("  not wired dependencies. composeApp/shared do not import from them yet.")
+            lines.append("  To use them, follow the wiring steps in the project's AGENTS.md:")
+            for pack in reference_packs:
+                if pack == "auth":
+                    lines.append("    kmp:auth       → register authModule in shared/src/.../di/Modules.kt")
+                elif pack == "room":
+                    lines.append("    kmp:room_data  → register dataModule in shared/src/.../di/Modules.kt")
+                elif pack == "ui_theme":
+                    lines.append("    kmp:ui_theme   → add implementation(projects.kmp.uiTheme) to composeApp")
+            lines.append("  Or remove them with --no-auth --no-theme (and skip --room) if unneeded.")
 
     lines.append("")
     print("\n".join(lines), file=sys.stderr)

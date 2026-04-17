@@ -31,6 +31,7 @@ Same checklist as the skill. **Do not silently default:**
 5. **Verification** — runs `./gradlew build` / `pnpm build` by default; pass `--skip-verify` only if user opts out.
 6. **Auth provider API keys** — if `--auth-provider clerk` or `supabase`, ask whether the user has keys ready. If yes, collect and pass via `--clerk-publishable-key` / `--clerk-secret-key` / `--supabase-url` / `--supabase-anon-key`. If no, the starter's graceful-no-keys path will show a "configure <provider>" notice on the sign-in page.
 7. **Always verify with `pnpm dev` / `./gradlew :composeApp:run` after scaffold.** Build alone does not exercise middleware/runtime.
+8. **KMP pack caveat** — `kmp:auth`, `kmp:room_data`, `kmp:ui_theme` are reference modules, not wired dependencies. The scaffold's stderr prints a wiring-instruction warning when these packs are kept — relay that warning to the user. (Full wiring tracked for v0.5.0.)
 
 ## Flags
 

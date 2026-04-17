@@ -63,6 +63,7 @@ Scaffolding is destructive on the target path and generates identifiers that are
    - Supabase keys → pass via `--supabase-url` and `--supabase-anon-key`.
    - Unset flags are silently omitted from `.env.local`; the starter's graceful-no-keys path activates.
 7. **Always verify with `pnpm dev` (Next.js) or `./gradlew :composeApp:run` (KMP) after the scaffold completes.** `pnpm build` alone does not exercise middleware/runtime; the full dev server + curl on `/`, `/sign-in`, `/dashboard` is what catches proxy and auth bugs.
+8. **KMP pack status caveat** — `kmp:auth`, `kmp:room_data`, `kmp:ui_theme` are shipped as **reference modules, not wired dependencies** in the current starter. `composeApp`/`shared` don't import from them. When the user selects any of these packs, the scaffold's "Next steps" block prints a wiring-instructions warning — **relay this warning to the user verbatim**. Don't imply the packs are plug-and-play. (Full cross-target wiring is planned for v0.5.0.) Next.js does NOT have this caveat — its provider switching is fully env-driven as of base-next-starter v0.1.2.
 
 If any answer is ambiguous, **ask** — do not guess.
 
