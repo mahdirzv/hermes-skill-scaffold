@@ -282,8 +282,6 @@ def collect_selected_ids(args: argparse.Namespace) -> list[str]:
         ids.append(f"{args.stack}_room")
     if args.ci:
         ids.append(f"{args.stack}_ci")
-    if args.github:
-        ids.append(f"{args.stack}_github")
     ids.extend(args.pack or [])
     seen: set[str] = set()
     return [i for i in ids if not (i in seen or seen.add(i))]
@@ -661,7 +659,6 @@ def add_scaffold_args(p: argparse.ArgumentParser) -> None:
     p.add_argument("--auth-provider")
     p.add_argument("--theme-preset")
     p.add_argument("--room", action="store_true")
-    p.add_argument("--github", action="store_true")
     p.add_argument("--ci", action="store_true")
     p.add_argument("--no-auth", action="store_true")
     p.add_argument("--no-theme", action="store_true")

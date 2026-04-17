@@ -39,6 +39,10 @@ python3 scripts/scaffold.py create <stack> <name> --dest <path> [flags]
 - **--force** — allow non-empty destination
 - **--refresh-cache** — re-clone the starter even if cached
 
+> **Creating a GitHub repo is a separate step.** After scaffold completes, run:
+> `cd <dest> && gh repo create <slug> --source . --push --private`.
+> The scaffold does not touch remote state for you.
+
 See `references/command-grammar.md` for the full flag set.
 
 ## Architecture

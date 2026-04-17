@@ -12,7 +12,7 @@ python3 scripts/scaffold.py create <stack> <name> --dest <path> \
   [--bundle-prefix com.example] \
   [--auth-provider clerk|supabase|...] \
   [--theme-preset neutral|vivid|...] \
-  [--room] [--ci] [--github] \
+  [--room] [--ci] \
   [--no-auth] [--no-theme] \
   [--pack <extra_pack_id>]... \
   [--plan-out plan.json] \
@@ -49,8 +49,8 @@ python3 scripts/scaffold.py apply --plan plan.json --dest <path> \
 
 Pack ids follow `<stack>_<name>`:
 
-- KMP: `kmp_base`, `kmp_auth`, `kmp_ui_theme`, `kmp_room`, `kmp_github`, `kmp_ci`
-- Next.js: `nextjs_base`, `nextjs_auth`, `nextjs_ui_theme`, `nextjs_ci`, `nextjs_github`
+- KMP: `kmp_base`, `kmp_auth`, `kmp_ui_theme`, `kmp_room`, `kmp_ci`
+- Next.js: `nextjs_base`, `nextjs_auth`, `nextjs_ui_theme`, `nextjs_ci`
 
 The starter's `.scaffold.json` maps each pack name (without the stack prefix) to either:
 - `paths: [...]` — directories/files to delete when unselected (subtractive)
@@ -59,3 +59,14 @@ The starter's `.scaffold.json` maps each pack name (without the stack prefix) to
 ## Cache
 
 Cloned starters live under `~/.cache/scaffold-factory/<cache-key>/`. Re-runs reuse the cache. Use `--refresh-cache` to force a fresh clone.
+
+## Post-scaffold: creating a GitHub repo
+
+The scaffold intentionally does NOT create a GitHub repo for you. After `create` finishes:
+
+```bash
+cd <dest>
+gh repo create <slug> --source . --push --private   # or --public
+```
+
+This keeps the scaffold itself focused on file operations and leaves remote-state side effects to a command you invoke explicitly.
