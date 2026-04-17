@@ -4,6 +4,10 @@ All notable changes to scaffold-factory are documented here. Format loosely foll
 
 ## [Unreleased]
 
+### Added
+- `tests/` — pytest suite (64 tests) covering the six load-bearing helpers in `scripts/scaffold.py`: `parse_git_source` + `cache_key`, `placeholder_expand`, `apply_starter_placeholders` (contents rewrite, path relocation, drift detection, collision handling), `validate_package_prefix`, `prune_unselected_packs`, `build_identifiers` + `slugify`/`humanize`. Pure-Python, no toolchains.
+- New `pytest` job in `.github/workflows/smoke.yml`. Runs on every PR; no toolchain setup, sub-second runtime. Closes the highest-leverage test coverage gap identified in the v0.4.0 audit backlog.
+
 ### Changed
 - README install section rewritten: adds a verify step, separates "Updating" as its own sub-section, and documents two sharp edges of the CLI — (a) `claude plugin update <name>` fails with "not found" unless you qualify it as `<name>@<marketplace>`, and (b) a stale marketplace cache can make updates appear to be no-ops until `claude plugin marketplace update <marketplace>` is run first. No code change.
 

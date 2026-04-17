@@ -20,6 +20,27 @@ concurrency:
 
 jobs:
   # ────────────────────────────────────────────────────────────────
+  # Unit tests: pytest suite for scripts/scaffold.py helpers.
+  # Covers parse_git_source, placeholder_expand, apply_starter_placeholders
+  # (contents + path relocation + drift detection), validate_package_prefix,
+  # prune_unselected_packs, build_identifiers. Pure-Python, no toolchains.
+  # ────────────────────────────────────────────────────────────────
+  pytest:
+    name: Unit tests (pytest)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+      - name: Install pytest
+        run: python -m pip install --upgrade pip && pip install pytest
+      - name: Run unit tests
+        run: python -m pytest tests/ -v
+
+  # ────────────────────────────────────────────────────────────────
   # Errors: fast (no toolchains) — prove the hardening fixes still
   # fire on known-bad inputs. If these break, drift detection, prefix
   # validation, or project_root_name sanitization has regressed.
