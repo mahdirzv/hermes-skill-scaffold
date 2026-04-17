@@ -37,7 +37,7 @@ import urllib.parse
 from pathlib import Path, PurePosixPath
 from typing import Any, NoReturn
 
-SCAFFOLD_VERSION = "0.4.4"
+SCAFFOLD_VERSION = "0.4.5"
 SCRIPT_DIR = Path(__file__).resolve().parent
 DEFAULT_REGISTRY = SCRIPT_DIR.parent / "references" / "registry.json"
 DEFAULT_CACHE = Path.home() / ".cache" / "scaffold-factory"

@@ -1,7 +1,7 @@
 {
-  "version": "0.4.4",
+  "version": "0.4.5",
   "min_scaffold_py_version": "0.1.0",
-  "_note": "v0.4.4: nextjs base bumped to v0.1.8 (industry-standard structural refactor: src/modules removed — auth lives in src/features/auth, UI primitives in src/components/ui, design tokens/themes in src/lib/design; components.json shadcn aliases fixed; pnpm-workspace.yaml dropped). No scaffold.py logic changes; zero behaviour change for existing scaffolds. Tags are immutable — safe to cache indefinitely.",
+  "_note": "v0.4.5: nextjs base bumped to v0.1.9 (Clerk catch-all routes for sign-in/sign-up — Clerk's hosted components probe sub-routes at runtime, so sign-in/[[...rest]]/page.tsx and sign-up/[[...rest]]/page.tsx are required to avoid 'not a catch-all route' errors under live Clerk dev keys). Includes v0.1.8 structural refactor (src/features, src/components/ui, src/lib/design). Tags are immutable — safe to cache indefinitely.",
   "stack_defaults": {
     "kmp": {
       "auth_provider": "clerk",
@@ -46,7 +46,7 @@
       "id": "nextjs_base",
       "stack": "nextjs",
       "kind": "base",
-      "source": "git+https://github.com/mahdirzv/base-next-starter@v0.1.8",
+      "source": "git+https://github.com/mahdirzv/base-next-starter@v0.1.9",
       "verify": [
         [
           "pnpm",

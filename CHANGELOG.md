@@ -4,6 +4,14 @@ All notable changes to scaffold-factory are documented here. Format loosely foll
 
 ## [Unreleased]
 
+## [0.4.5] — 2026-04-17
+
+Registry pin bump to consume the Next.js starter's Clerk catch-all route fix. scaffold.py logic unchanged.
+
+### Changed
+- **Registry pin** `base-next-starter@v0.1.8` → `@v0.1.9`. v0.1.9 converts the sign-in/sign-up pages to Next.js catch-all routes (`sign-in/[[...rest]]/page.tsx`, `sign-up/[[...rest]]/page.tsx`). Real-world bug found running the starter against live Clerk dev keys: Clerk's hosted `<SignIn/>` / `<SignUp/>` components probe sub-routes (e.g. `/sign-up/SignUp_clerk_catchall_check_<timestamp>`) for their internal state machine — without catch-all pages, those probes 404 and Clerk throws *"The <SignUp/> component is not configured correctly... is not a catch-all route."* Starter now documents this as Known Gotcha #10 in AGENTS.md.
+- `SCAFFOLD_VERSION`, `registry.json` version, `plugin.json`, `marketplace.json` all bumped to 0.4.5.
+
 ## [0.4.4] — 2026-04-17
 
 Registry pin bump to consume the Next.js starter's industry-standard structural refactor. scaffold.py logic unchanged.
