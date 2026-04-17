@@ -1,4 +1,4 @@
-# hermes-skill-scaffold
+# scaffold-factory
 
 Portable project-scaffolding skill for KMP and Next.js. Installable into any agent (Claude Code, OpenClaw, Hermes) with a single `git clone`.
 
@@ -26,10 +26,10 @@ Generates `.env.local` with `AUTH_PROVIDER=clerk` and runs `pnpm build`.
 ## Install
 
 ```bash
-git clone https://github.com/mahdirzv/hermes-skill-scaffold ~/.claude/skills/hermes-skill-scaffold
+git clone https://github.com/mahdirzv/scaffold-factory ~/.claude/skills/scaffold-factory
 ```
 
-That's it. On first run, starters are lazy-cloned into `~/.cache/hermes-skill-scaffold/`.
+That's it. On first run, starters are lazy-cloned into `~/.cache/scaffold-factory/`.
 
 ### Claude Code / OpenClaw / Hermes
 

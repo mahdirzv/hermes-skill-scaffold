@@ -58,4 +58,4 @@ The starter's `.scaffold.json` maps each pack name (without the stack prefix) to
 
 ## Cache
 
-Cloned starters live under `~/.cache/hermes-skill-scaffold/<cache-key>/`. Re-runs reuse the cache. Use `--refresh-cache` to force a fresh clone.
+Cloned starters live under `~/.cache/scaffold-factory/<cache-key>/`. Re-runs reuse the cache. Use `--refresh-cache` to force a fresh clone.

@@ -29,7 +29,7 @@ from typing import Any, NoReturn
 SCAFFOLD_VERSION = "0.1.0"
 SCRIPT_DIR = Path(__file__).resolve().parent
 DEFAULT_REGISTRY = SCRIPT_DIR.parent / "references" / "registry.json"
-DEFAULT_CACHE = Path.home() / ".cache" / "hermes-skill-scaffold"
+DEFAULT_CACHE = Path.home() / ".cache" / "scaffold-factory"
 
 KIND_ORDER = {"base": 0, "feature": 1, "infra": 2}
 SKIP_DIRS = {

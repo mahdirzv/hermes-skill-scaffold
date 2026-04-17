@@ -37,7 +37,7 @@ Feature/infra packs typically only need `id`, `stack`, and `kind`. The starter's
 
 ### `source` resolution order
 
-1. `git+<url>@<ref>[#<subpath>]` → shallow-clone into `~/.cache/hermes-skill-scaffold/`
+1. `git+<url>@<ref>[#<subpath>]` → shallow-clone into `~/.cache/scaffold-factory/`
 2. `$ENV_VAR` → read an absolute path from the environment
 3. Absolute path → used as-is
 4. Relative path → resolved against the registry file's directory
