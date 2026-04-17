@@ -61,14 +61,37 @@ If you start one Next.js app a year, `create-next-app` is fine. If you start fiv
 
 ## Install
 
-**Recommended — Claude Code plugin (auto-updates, marketplace-aware):**
+### Recommended — Claude Code plugin
+
+Run these from your shell (or use the `/plugin ...` equivalents inside a Claude Code session — same commands, different entry point):
 
 ```bash
 claude plugin marketplace add mahdirzv/scaffold-factory
 claude plugin install scaffold-factory
 ```
 
-Future updates: `claude plugin update scaffold-factory`.
+Verify:
+
+```bash
+claude plugin list | grep scaffold-factory
+# → scaffold-factory@mahdirzv  Version: 0.4.0
+```
+
+### Updating
+
+When a new release lands (e.g. `v0.5.0`):
+
+```bash
+claude plugin marketplace update mahdirzv           # refresh the marketplace.json cache
+claude plugin update scaffold-factory@mahdirzv      # bump the installed plugin
+```
+
+> **Two gotchas worth knowing:**
+>
+> - `claude plugin update scaffold-factory` (unqualified) fails with `Plugin "scaffold-factory" not found`. Always pass the fully-qualified name `scaffold-factory@mahdirzv`.
+> - If the marketplace cache is stale, `plugin update` says "already up to date" even when a new version is published upstream. Run `claude plugin marketplace update mahdirzv` first.
+
+### Using it
 
 Once installed, trigger by asking the agent:
 
@@ -84,15 +107,20 @@ Or use the slash command directly:
 
 The agent confirms your package prefix, pack selection, destination, and API keys before running (see [`SKILL.md`](SKILL.md) — it's instructed not to silently default).
 
-**Fallback — manual clone (no auto-updates):**
+### Fallback — manual git clone (no auto-updates)
 
 ```bash
 git clone https://github.com/mahdirzv/scaffold-factory ~/.claude/skills/scaffold-factory
 ```
 
-Use this if you're not using Claude Code's plugin system. You'll need to `git pull` manually to get new releases.
+Use this only if you can't use Claude Code's plugin system. You'll `git pull` manually to get new releases; `/plugin update` does not apply.
 
-> **Already have a git-clone install?** Either keep using it or `rm -rf ~/.claude/skills/scaffold-factory` before installing the plugin. Having both active at once can cause duplicate-skill routing.
+> **Already have a git-clone install?** Remove it before installing the plugin — running both at once creates a duplicate skill and routing may pick the wrong copy:
+>
+> ```bash
+> rm -rf ~/.claude/skills/scaffold-factory
+> claude plugin install scaffold-factory
+> ```
 
 ## Requirements
 
