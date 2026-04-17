@@ -4,12 +4,22 @@ All notable changes to scaffold-factory are documented here. Format loosely foll
 
 ## [Unreleased]
 
+## [0.4.1] — 2026-04-17
+
+Hardening wave. Structured exit codes, dry-run preview, env-var fallback for secrets, 86-test pytest suite + CI job, registry pin bump to a bug-free Next.js starter. No breaking changes.
+
 ### Added
-- `tests/` — pytest suite (64 tests) covering the six load-bearing helpers in `scripts/scaffold.py`: `parse_git_source` + `cache_key`, `placeholder_expand`, `apply_starter_placeholders` (contents rewrite, path relocation, drift detection, collision handling), `validate_package_prefix`, `prune_unselected_packs`, `build_identifiers` + `slugify`/`humanize`. Pure-Python, no toolchains.
-- New `pytest` job in `.github/workflows/smoke.yml`. Runs on every PR; no toolchain setup, sub-second runtime. Closes the highest-leverage test coverage gap identified in the v0.4.0 audit backlog.
+- **Structured exit codes** (`EXIT_USAGE=2`, `EXIT_SYSTEM=3`, `EXIT_NETWORK=4`, `EXIT_STARTER=5`) with helpers `fail_usage`, `fail_system`, `fail_network`, `fail_starter`. Every `fail()` call site classified. Lets CI/wrappers tell "bad user input" (retryable) from "git clone died" (retryable differently) from "disk full" (hard stop). Generic `1` retained for uncategorised failures.
+- **`--dry-run` flag** on `create` and `apply`. Computes the full plan, copies + rewrites in a throwaway tempdir, and prints all the same stats without ever touching `--dest`. Verification is force-skipped. Ideal for previewing a scaffold before committing to a target directory.
+- **Env-var fallback for provider secrets**. `--clerk-secret-key` / `--clerk-publishable-key` / `--supabase-url` / `--supabase-anon-key` now fall back to the matching `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` / `CLERK_SECRET_KEY` / `NEXT_PUBLIC_SUPABASE_URL` / `NEXT_PUBLIC_SUPABASE_ANON_KEY` env var when the flag is omitted. CLI flag always wins. Keeps secrets out of shell history.
+- **`tests/` pytest suite (86 tests)** covering the load-bearing helpers in `scripts/scaffold.py`: `parse_git_source` + `cache_key`, `placeholder_expand`, `apply_starter_placeholders` (contents rewrite, path relocation, drift detection, collision handling), `validate_package_prefix`, `prune_unselected_packs`, `build_identifiers` + `slugify`/`humanize`, plus the new exit-code taxonomy, `--dry-run` end-to-end, and env-var fallback matrix. Pure-Python, no toolchains, ~80ms runtime.
+- **New `pytest` job** in `.github/workflows/smoke.yml`. Runs on every PR. Closes the highest-leverage test coverage gap from the v0.4.0 audit backlog.
 
 ### Changed
-- README install section rewritten: adds a verify step, separates "Updating" as its own sub-section, and documents two sharp edges of the CLI — (a) `claude plugin update <name>` fails with "not found" unless you qualify it as `<name>@<marketplace>`, and (b) a stale marketplace cache can make updates appear to be no-ops until `claude plugin marketplace update <marketplace>` is run first. No code change.
+- **Registry pin** `base-next-starter@v0.1.2` → `@v0.1.3`. v0.1.3 fixes 3 shipped-failing auth provider tests via call-time env guards (first audit finding); runtime behaviour unchanged.
+- **Registry verify commands use list form**. `kmp_base.verify` was `["./gradlew --no-daemon build"]` (string, runs with `shell=True`); now `[["./gradlew", "--no-daemon", "build"]]` (list, `shell=False`). Eliminates the one call site still hitting `shell=True`. `run_tool` docstring documents the trust boundary.
+- `SCAFFOLD_VERSION` bumped `0.4.0` → `0.4.1`; `references/registry.json` version field bumped to `0.4.1`.
+- README install section rewritten: adds a verify step, separates "Updating" as its own sub-section, and documents two sharp edges of the CLI — (a) `claude plugin update <name>` fails with "not found" unless you qualify it as `<name>@<marketplace>`, and (b) a stale marketplace cache can make updates appear to be no-ops until `claude plugin marketplace update <marketplace>` is run first.
 
 ## [0.4.0] — 2026-04-17
 

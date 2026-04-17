@@ -37,7 +37,7 @@ import urllib.parse
 from pathlib import Path, PurePosixPath
 from typing import Any, NoReturn
 
-SCAFFOLD_VERSION = "0.4.0"
+SCAFFOLD_VERSION = "0.4.1"
 SCRIPT_DIR = Path(__file__).resolve().parent
 DEFAULT_REGISTRY = SCRIPT_DIR.parent / "references" / "registry.json"
 DEFAULT_CACHE = Path.home() / ".cache" / "scaffold-factory"
@@ -49,12 +49,37 @@ SKIP_DIRS = {
     "xcuserdata", ".turbo",
 }
 
+# Provider secret flags: CLI flag name, placeholder key, env-var fallback.
+# Env-var fallback keeps secrets out of shell history when users `export` them.
+# CLI flag always wins.
+_SECRET_FLAG_TABLE: tuple[tuple[str, str, str], ...] = (
+    ("clerk_publishable_key", "clerk_publishable_key", "NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY"),
+    ("clerk_secret_key",      "clerk_secret_key",      "CLERK_SECRET_KEY"),
+    ("supabase_url",          "supabase_url",          "NEXT_PUBLIC_SUPABASE_URL"),
+    ("supabase_anon_key",     "supabase_anon_key",     "NEXT_PUBLIC_SUPABASE_ANON_KEY"),
+)
+
+# Exit code taxonomy. Lets callers (CI, wrapper scripts, humans) distinguish
+# retryable user-input errors from system errors, network failures, and starter
+# bugs. 1 is retained as a generic fallback for anything not yet classified.
+EXIT_GENERIC = 1
+EXIT_USAGE   = 2   # bad flags, invalid identifiers, unknown pack id, dest not empty
+EXIT_SYSTEM  = 3   # missing executable, source path missing, filesystem/OS errors, verify failure
+EXIT_NETWORK = 4   # git clone/checkout failures, unreachable remote
+EXIT_STARTER = 5   # registry/manifest malformed, placeholder drift, rename collision
+
 
 # ---------- errors ----------
 
-def fail(message: str, code: int = 1) -> NoReturn:
+def fail(message: str, code: int = EXIT_GENERIC) -> NoReturn:
     print(f"error: {message}", file=sys.stderr)
     raise SystemExit(code)
+
+
+def fail_usage(message: str) -> NoReturn:   fail(message, EXIT_USAGE)
+def fail_system(message: str) -> NoReturn:  fail(message, EXIT_SYSTEM)
+def fail_network(message: str) -> NoReturn: fail(message, EXIT_NETWORK)
+def fail_starter(message: str) -> NoReturn: fail(message, EXIT_STARTER)
 
 
 def warn(message: str) -> None:
@@ -81,7 +106,14 @@ def _tool_hint(executable: str) -> str:
 
 
 def run_tool(cmd, *, cwd=None, shell=False, capture=True, env=None) -> subprocess.CompletedProcess:
-    """Run a subprocess; convert FileNotFoundError into a clean fail() with a hint."""
+    """Run a subprocess; convert FileNotFoundError into a clean fail() with a hint.
+
+    Trust boundary: shell=True is only reached from run_verify() when a registry
+    entry declares a verify command as a string (not a list). The registry is
+    shipped in-repo (references/registry.json) and only the maintainer can
+    change it — so the shell invocation is trusted. Prefer list form in the
+    registry; strings are supported only for backwards compat.
+    """
     display = cmd if isinstance(cmd, str) else " ".join(cmd)
     try:
         return subprocess.run(
@@ -94,7 +126,7 @@ def run_tool(cmd, *, cwd=None, shell=False, capture=True, env=None) -> subproces
         )
     except FileNotFoundError:
         first = cmd.split()[0] if isinstance(cmd, str) else cmd[0]
-        fail(
+        fail_system(
             f"required executable not found: {first!r} "
             f"(while trying to run: {display}). {_tool_hint(first)}"
         )
@@ -106,7 +138,7 @@ def slugify(value: str) -> str:
     slug = re.sub(r"[^a-zA-Z0-9]+", "-", value.strip().lower())
     slug = re.sub(r"-+", "-", slug).strip("-")
     if not slug:
-        fail(f"cannot slugify project name: {value!r}")
+        fail_usage(f"cannot slugify project name: {value!r}")
     return slug
 
 
@@ -120,7 +152,7 @@ def humanize(value: str) -> str:
 def compact_identifier(value: str) -> str:
     compact = re.sub(r"[^a-z0-9]+", "", value.lower())
     if not compact:
-        fail(f"cannot build compact identifier from {value!r}")
+        fail_usage(f"cannot build compact identifier from {value!r}")
     return compact
 
 
@@ -132,7 +164,7 @@ _PACKAGE_PREFIX_RE = re.compile(r"^[a-z][a-z0-9_]*(\.[a-z][a-z0-9_]*)*$")
 
 def validate_package_prefix(prefix: str) -> None:
     if not _PACKAGE_PREFIX_RE.match(prefix):
-        fail(
+        fail_usage(
             f"invalid --package-prefix {prefix!r}: must be dotted lowercase "
             "segments starting with a letter (e.g. `com.example`, `dev.mahdi`, "
             "`io.yourcompany`). Allowed chars per segment: [a-z0-9_]."
@@ -154,7 +186,7 @@ def build_identifiers(stack: str, name: str, package_prefix: str, bundle_prefix:
     # Xcode project name, and fs-safe. Strip everything outside [A-Za-z0-9_].
     root_name = re.sub(r"[^A-Za-z0-9_]+", "", display.replace(" ", ""))
     if not root_name:
-        fail(
+        fail_usage(
             f"project name {name!r} produces an empty project_root_name after "
             "sanitization (only letters, digits, and underscores are kept). "
             "Pick a name with at least one alphanumeric character."
@@ -246,10 +278,10 @@ def ensure_cached_clone(url: str, ref: str, cache_dir: Path, refresh: bool = Fal
         cmd = ["git", "clone", url, str(tmp)]
         proc = run_tool(cmd, env=_git_env())
         if proc.returncode != 0:
-            fail(f"git clone failed for {url}: {proc.stderr.strip()}")
+            fail_network(f"git clone failed for {url}: {proc.stderr.strip()}")
         co = run_tool(["git", "-C", str(tmp), "checkout", ref], env=_git_env())
         if co.returncode != 0:
-            fail(f"git checkout {ref} failed: {co.stderr.strip()}")
+            fail_network(f"git checkout {ref} failed: {co.stderr.strip()}")
     tmp.rename(dest)
     return dest
 
@@ -266,7 +298,7 @@ def resolve_source_path(raw: str, registry_base: Path, cache_dir: Path, refresh:
         env_var = raw[1:]
         val = os.environ.get(env_var, "").strip()
         if not val:
-            fail(f"source {raw!r} references env var ${env_var} which is not set")
+            fail_usage(f"source {raw!r} references env var ${env_var} which is not set")
         return Path(val).expanduser().resolve()
 
     p = Path(raw)
@@ -279,24 +311,24 @@ def resolve_source_path(raw: str, registry_base: Path, cache_dir: Path, refresh:
 
 def load_registry(path: Path) -> dict[str, Any]:
     if not path.exists():
-        fail(f"registry not found: {path}")
+        fail_starter(f"registry not found: {path}")
     data = json.loads(path.read_text(encoding="utf-8"))
     if not isinstance(data, dict):
-        fail("registry must be a JSON object")
+        fail_starter("registry must be a JSON object")
     data.setdefault("packs", [])
     data.setdefault("stack_defaults", {})
     min_ver = data.get("min_scaffold_py_version")
     if min_ver and tuple(map(int, min_ver.split("."))) > tuple(map(int, SCAFFOLD_VERSION.split("."))):
-        fail(f"registry requires scaffold.py >= {min_ver} but this is {SCAFFOLD_VERSION}")
+        fail_starter(f"registry requires scaffold.py >= {min_ver} but this is {SCAFFOLD_VERSION}")
     return data
 
 
 def validate_entry(entry: dict[str, Any]) -> None:
     for field in ("id", "stack", "kind"):
         if field not in entry:
-            fail(f"registry entry missing required field {field!r}: {entry}")
+            fail_starter(f"registry entry missing required field {field!r}: {entry}")
     if entry["kind"] not in KIND_ORDER:
-        fail(f"entry {entry['id']!r} has invalid kind {entry['kind']!r}")
+        fail_starter(f"entry {entry['id']!r} has invalid kind {entry['kind']!r}")
 
 
 def index_registry(entries: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
@@ -304,7 +336,7 @@ def index_registry(entries: list[dict[str, Any]]) -> dict[str, dict[str, Any]]:
     for e in entries:
         validate_entry(e)
         if e["id"] in idx:
-            fail(f"duplicate registry id: {e['id']}")
+            fail_starter(f"duplicate registry id: {e['id']}")
         idx[e["id"]] = e
     return idx
 
@@ -329,20 +361,20 @@ def collect_selected_ids(args: argparse.Namespace) -> list[str]:
 def select_entries(indexed: dict[str, dict[str, Any]], stack: str, selected_ids: list[str]) -> tuple[dict[str, Any], list[dict[str, Any]]]:
     base_id = f"{stack}_base"
     if base_id not in indexed:
-        fail(f"missing base entry: {base_id}")
+        fail_starter(f"missing base entry: {base_id}")
     base = indexed[base_id]
     if base["stack"] != stack:
-        fail(f"base entry {base_id} has mismatched stack {base['stack']!r}")
+        fail_starter(f"base entry {base_id} has mismatched stack {base['stack']!r}")
 
     rest: list[dict[str, Any]] = []
     for eid in selected_ids:
         if eid == base_id:
             continue
         if eid not in indexed:
-            fail(f"unknown registry id: {eid}")
+            fail_usage(f"unknown registry id: {eid}")
         e = indexed[eid]
         if e["stack"] != stack:
-            fail(f"entry {eid!r} belongs to stack {e['stack']!r}, expected {stack!r}")
+            fail_usage(f"entry {eid!r} belongs to stack {e['stack']!r}, expected {stack!r}")
         rest.append(e)
     rest.sort(key=lambda e: (KIND_ORDER[e["kind"]], e["id"]))
     return base, rest
@@ -353,10 +385,10 @@ def validate_dependencies(indexed: dict[str, dict[str, Any]], entries: list[dict
     for e in entries:
         for dep in e.get("requires", []):
             if dep not in sel:
-                fail(f"entry {e['id']!r} requires {dep!r} but it was not selected")
+                fail_usage(f"entry {e['id']!r} requires {dep!r} but it was not selected")
         for con in e.get("conflicts_with", []):
             if con in sel:
-                fail(f"entry {e['id']!r} conflicts with {con!r}")
+                fail_usage(f"entry {e['id']!r} conflicts with {con!r}")
 
 
 # ---------- placeholders ----------
@@ -372,16 +404,12 @@ def merged_placeholders(registry: dict[str, Any], base: dict[str, Any], packs: l
         values["auth_provider"] = args.auth_provider
     if args.theme_preset:
         values["theme_preset"] = args.theme_preset
-    # Optional provider API keys — only recorded if explicitly passed. Empty values
-    # pass through apply_env_file which skips empty lines, so users who omit them
-    # get a clean .env.local without placeholder-looking junk.
-    for flag_name, placeholder in (
-        ("clerk_publishable_key", "clerk_publishable_key"),
-        ("clerk_secret_key",      "clerk_secret_key"),
-        ("supabase_url",          "supabase_url"),
-        ("supabase_anon_key",     "supabase_anon_key"),
-    ):
-        flag_value = getattr(args, flag_name, None)
+    # Optional provider API keys — only recorded if explicitly passed or present
+    # in env. Flag wins over env; env keeps secrets out of shell history. Empty
+    # values pass through apply_env_file which skips empty lines, so users who
+    # omit them get a clean .env.local without placeholder-looking junk.
+    for flag_name, placeholder, env_var in _SECRET_FLAG_TABLE:
+        flag_value = getattr(args, flag_name, None) or os.environ.get(env_var, "")
         if flag_value:
             values[placeholder] = flag_value
         else:
@@ -407,7 +435,7 @@ def read_starter_manifest(src: Path) -> dict[str, Any]:
     try:
         return json.loads(p.read_text(encoding="utf-8"))
     except json.JSONDecodeError as e:
-        fail(f"invalid .scaffold.json in {src}: {e}")
+        fail_starter(f"invalid .scaffold.json in {src}: {e}")
 
 
 def apply_starter_placeholders(dest: Path, manifest: dict[str, Any], values: dict[str, str]) -> dict[str, Any]:
@@ -479,7 +507,7 @@ def apply_starter_placeholders(dest: Path, manifest: dict[str, Any], values: dic
 
     for src, tgt in relocations:
         if tgt.exists():
-            fail(f"rename collision: {src} → {tgt}")
+            fail_starter(f"rename collision: {src} → {tgt}")
         tgt.parent.mkdir(parents=True, exist_ok=True)
         src.rename(tgt)
         renamed_paths += 1
@@ -498,7 +526,7 @@ def apply_starter_placeholders(dest: Path, manifest: dict[str, Any], values: dic
     # ---- Drift detection ----
     zero_match = [find for find, count in match_counts.items() if count == 0]
     if zero_match and len(zero_match) == len(pairs):
-        fail(
+        fail_starter(
             "no placeholder find strings matched anything in the starter; "
             ".scaffold.json is out of sync with the repo. Missing strings: "
             + ", ".join(repr(f) for f in zero_match)
@@ -589,9 +617,9 @@ def ignore_fn(_dir: str, names: list[str]) -> set[str]:
 
 def copy_tree(src: Path, dest: Path) -> None:
     if not src.exists():
-        fail(f"source path does not exist: {src}")
+        fail_system(f"source path does not exist: {src}")
     if not src.is_dir():
-        fail(f"source path is not a directory: {src}")
+        fail_system(f"source path is not a directory: {src}")
     shutil.copytree(src, dest, dirs_exist_ok=True, ignore=ignore_fn)
 
 
@@ -613,7 +641,7 @@ def run_verify(commands: list[str | list[str]], cwd: Path) -> list[dict[str, Any
             print(proc.stderr, end="", file=sys.stderr)
         results.append({"command": display, "returncode": proc.returncode})
         if proc.returncode != 0:
-            fail(f"verification command failed: {display}")
+            fail_system(f"verification command failed: {display}")
     return results
 
 
@@ -656,10 +684,32 @@ def resolve_plan(args: argparse.Namespace) -> dict[str, Any]:
     }
 
 
-def apply_plan(plan: dict[str, Any], dest: Path, *, force: bool = False, skip_verify: bool = False, refresh_cache: bool = False) -> dict[str, Any]:
+def apply_plan(
+    plan: dict[str, Any],
+    dest: Path,
+    *,
+    force: bool = False,
+    skip_verify: bool = False,
+    refresh_cache: bool = False,
+    dry_run: bool = False,
+) -> dict[str, Any]:
+    """Materialize a resolved plan into dest.
+
+    dry_run=True: do all the work (copy, placeholder rewrite, pack pruning,
+    env file generation) but against a throwaway tempdir. The user's dest is
+    never touched. Verification is always skipped. Returns the same stats dict
+    with `dry_run: true` and `destination: None` so tooling can tell the
+    difference. Useful for previewing a scaffold before committing to it.
+    """
     dest = dest.expanduser()
-    if dest.exists() and any(dest.iterdir()) and not force:
-        fail(f"destination already exists and is not empty: {dest}")
+    intended_dest = dest
+    if dry_run:
+        import tempfile
+        dest = Path(tempfile.mkdtemp(prefix="scaffold-dryrun-"))
+        force = True       # our tmp dir is empty, but be defensive
+        skip_verify = True  # never run external verify in dry-run
+    elif dest.exists() and any(dest.iterdir()) and not force:
+        fail_usage(f"destination already exists and is not empty: {dest}")
     dest.mkdir(parents=True, exist_ok=True)
 
     registry_base = Path(plan["_registry_path"]).parent
@@ -671,7 +721,7 @@ def apply_plan(plan: dict[str, Any], dest: Path, *, force: bool = False, skip_ve
     # Pre-flight: resolve base source and check it exists BEFORE copying anything
     base_source = resolve_source_path(base["source"], registry_base, cache_dir, refresh=refresh_cache)
     if not base_source.exists():
-        fail(f"base source missing after resolve: {base_source}")
+        fail_starter(f"base source missing after resolve: {base_source}")
 
     # Copy whole base tree
     copy_tree(base_source, dest)
@@ -725,8 +775,8 @@ def apply_plan(plan: dict[str, Any], dest: Path, *, force: bool = False, skip_ve
         if verify:
             verify_results = run_verify(verify, cwd=dest)
 
-    return {
-        "destination": str(dest),
+    result = {
+        "destination": None if dry_run else str(dest),
         "changed_files": changed_files,
         "renamed_paths": renamed_paths,
         "placeholder_match_counts": placeholder_stats["match_counts"],
@@ -736,6 +786,11 @@ def apply_plan(plan: dict[str, Any], dest: Path, *, force: bool = False, skip_ve
         "verify_results": verify_results,
         "selected_packs": sorted(selected_pack_keys),
     }
+    if dry_run:
+        result["dry_run"] = True
+        result["intended_destination"] = str(intended_dest)
+        shutil.rmtree(dest, ignore_errors=True)
+    return result
 
 
 # ---------- argparse ----------
@@ -754,13 +809,15 @@ def add_scaffold_args(p: argparse.ArgumentParser) -> None:
     p.add_argument("--no-auth", action="store_true")
     p.add_argument("--no-theme", action="store_true")
     p.add_argument("--pack", action="append", default=[])
-    # Optional provider API keys. If omitted, the starter's graceful-no-keys
-    # path activates and the user sees "configure <provider>" notices until
-    # they fill in .env.local.
-    p.add_argument("--clerk-publishable-key", default=None, help="NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY")
-    p.add_argument("--clerk-secret-key",      default=None, help="CLERK_SECRET_KEY")
-    p.add_argument("--supabase-url",          default=None, help="NEXT_PUBLIC_SUPABASE_URL")
-    p.add_argument("--supabase-anon-key",     default=None, help="NEXT_PUBLIC_SUPABASE_ANON_KEY")
+    # Optional provider API keys. If omitted, falls back to the matching env
+    # var (NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY, CLERK_SECRET_KEY, NEXT_PUBLIC_SUPABASE_URL,
+    # NEXT_PUBLIC_SUPABASE_ANON_KEY) — handy to avoid leaking secrets into shell
+    # history. If neither flag nor env is set, the starter's graceful-no-keys
+    # path activates and the user sees "configure <provider>" notices.
+    p.add_argument("--clerk-publishable-key", default=None, help="NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY (also read from env)")
+    p.add_argument("--clerk-secret-key",      default=None, help="CLERK_SECRET_KEY (also read from env)")
+    p.add_argument("--supabase-url",          default=None, help="NEXT_PUBLIC_SUPABASE_URL (also read from env)")
+    p.add_argument("--supabase-anon-key",     default=None, help="NEXT_PUBLIC_SUPABASE_ANON_KEY (also read from env)")
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -778,6 +835,8 @@ def build_parser() -> argparse.ArgumentParser:
     apply.add_argument("--force", action="store_true")
     apply.add_argument("--skip-verify", action="store_true")
     apply.add_argument("--refresh-cache", action="store_true")
+    apply.add_argument("--dry-run", action="store_true",
+                       help="Preview changes in a tempdir; do not touch --dest. Implies --skip-verify.")
 
     create = sub.add_parser("create", help="Resolve and apply in one pass")
     add_scaffold_args(create)
@@ -786,6 +845,8 @@ def build_parser() -> argparse.ArgumentParser:
     create.add_argument("--skip-verify", action="store_true")
     create.add_argument("--refresh-cache", action="store_true")
     create.add_argument("--plan-out", help="Optional path to write the resolved plan JSON")
+    create.add_argument("--dry-run", action="store_true",
+                        help="Preview changes in a tempdir; do not touch --dest. Implies --skip-verify.")
 
     return parser
 
@@ -861,6 +922,30 @@ def print_next_steps(plan: dict[str, Any], result: dict[str, Any]) -> None:
     print("\n".join(lines), file=sys.stderr)
 
 
+def print_dry_run_summary(plan: dict[str, Any], result: dict[str, Any]) -> None:
+    """Short human summary printed after a --dry-run, to stderr."""
+    dest = result.get("intended_destination", "")
+    stack = plan.get("stack", "")
+    name = plan.get("name", "")
+    changed = result.get("changed_files", 0)
+    renamed = result.get("renamed_paths", 0)
+    removed = result.get("removed_packs") or []
+    env_file = result.get("env_file")
+    packs = result.get("selected_packs") or []
+    lines = [
+        "",
+        f"[dry-run] would scaffold {stack} project {name!r} to {dest}",
+        f"  {changed} files rewritten, {renamed} paths renamed",
+        f"  selected packs: {', '.join(packs) if packs else '(none)'}",
+        f"  removed (unselected): {len(removed)} path(s)",
+    ]
+    if env_file:
+        lines.append(f"  would write env file: {env_file}")
+    lines.append("  NO files were written. Re-run without --dry-run to apply.")
+    lines.append("")
+    print("\n".join(lines), file=sys.stderr)
+
+
 def main() -> int:
     args = build_parser().parse_args()
 
@@ -871,21 +956,35 @@ def main() -> int:
 
     if args.command == "apply":
         plan = load_plan(args.plan)
-        result = apply_plan(plan, Path(args.dest), force=args.force, skip_verify=args.skip_verify, refresh_cache=args.refresh_cache)
+        result = apply_plan(
+            plan, Path(args.dest),
+            force=args.force, skip_verify=args.skip_verify,
+            refresh_cache=args.refresh_cache, dry_run=args.dry_run,
+        )
         print(json.dumps(result, indent=2, sort_keys=True))
-        print_next_steps(plan, result)
+        if not args.dry_run:
+            print_next_steps(plan, result)
+        else:
+            print_dry_run_summary(plan, result)
         return 0
 
     if args.command == "create":
         plan = resolve_plan(args)
         if args.plan_out:
             Path(args.plan_out).expanduser().write_text(json.dumps(plan, indent=2, sort_keys=True), encoding="utf-8")
-        result = apply_plan(plan, Path(args.dest), force=args.force, skip_verify=args.skip_verify, refresh_cache=args.refresh_cache)
+        result = apply_plan(
+            plan, Path(args.dest),
+            force=args.force, skip_verify=args.skip_verify,
+            refresh_cache=args.refresh_cache, dry_run=args.dry_run,
+        )
         print(json.dumps({"plan": plan, "result": result}, indent=2, sort_keys=True))
-        print_next_steps(plan, result)
+        if not args.dry_run:
+            print_next_steps(plan, result)
+        else:
+            print_dry_run_summary(plan, result)
         return 0
 
-    fail(f"unsupported command: {args.command}")
+    fail_usage(f"unsupported command: {args.command}")
     return 1
 
 
