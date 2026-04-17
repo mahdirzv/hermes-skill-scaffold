@@ -80,7 +80,7 @@ def _tool_hint(executable: str) -> str:
     return "Install it (or add it to PATH) before retrying."
 
 
-def run_tool(cmd, *, cwd=None, shell=False, capture=True) -> subprocess.CompletedProcess:
+def run_tool(cmd, *, cwd=None, shell=False, capture=True, env=None) -> subprocess.CompletedProcess:
     """Run a subprocess; convert FileNotFoundError into a clean fail() with a hint."""
     display = cmd if isinstance(cmd, str) else " ".join(cmd)
     try:
@@ -90,6 +90,7 @@ def run_tool(cmd, *, cwd=None, shell=False, capture=True) -> subprocess.Complete
             shell=shell,
             text=True,
             capture_output=capture,
+            env=env,
         )
     except FileNotFoundError:
         first = cmd.split()[0] if isinstance(cmd, str) else cmd[0]
@@ -216,6 +217,14 @@ def cache_key(url: str, ref: str) -> str:
     return f"{host}__{path}__{safe_ref}"
 
 
+def _git_env() -> dict[str, str]:
+    """Subprocess env that disables interactive prompts so git fails fast
+    if it ever does need credentials, instead of hanging on a TTY read."""
+    env = dict(os.environ)
+    env["GIT_TERMINAL_PROMPT"] = "0"
+    return env
+
+
 def ensure_cached_clone(url: str, ref: str, cache_dir: Path, refresh: bool = False) -> Path:
     cache_dir.mkdir(parents=True, exist_ok=True)
     dest = cache_dir / cache_key(url, ref)
@@ -229,16 +238,16 @@ def ensure_cached_clone(url: str, ref: str, cache_dir: Path, refresh: bool = Fal
         shutil.rmtree(tmp)
     cmd = ["git", "clone", "--depth", "1", "--branch", ref, url, str(tmp)]
     print(f"[scaffold] cloning {url}@{ref} → {dest}", file=sys.stderr)
-    proc = run_tool(cmd)
+    proc = run_tool(cmd, env=_git_env())
     if proc.returncode != 0:
         # fall back to full clone + checkout for raw SHAs
         if tmp.exists():
             shutil.rmtree(tmp)
         cmd = ["git", "clone", url, str(tmp)]
-        proc = run_tool(cmd)
+        proc = run_tool(cmd, env=_git_env())
         if proc.returncode != 0:
             fail(f"git clone failed for {url}: {proc.stderr.strip()}")
-        co = run_tool(["git", "-C", str(tmp), "checkout", ref])
+        co = run_tool(["git", "-C", str(tmp), "checkout", ref], env=_git_env())
         if co.returncode != 0:
             fail(f"git checkout {ref} failed: {co.stderr.strip()}")
     tmp.rename(dest)

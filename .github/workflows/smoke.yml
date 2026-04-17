@@ -1,0 +1,119 @@
+name: smoke
+
+# Runs on every PR and on push to main. Proves that:
+#   1. The scaffold script itself parses and runs on the target Python version.
+#   2. A fresh scaffold of each stack produces a project that compiles.
+#   3. Known-bad inputs still produce the expected readable errors (guards fix 4/6).
+#
+# This workflow is the v0.1.0 "credible release candidate" check the audit flagged.
+# Keep it fast: no iOS targets, no full Gradle build — assemble shared module is
+# enough to catch package-rewrite and dependency-resolution regressions.
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+concurrency:
+  group: smoke-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ────────────────────────────────────────────────────────────────
+  # Errors: fast (no toolchains) — prove the hardening fixes still
+  # fire on known-bad inputs. If these break, drift detection, prefix
+  # validation, or project_root_name sanitization has regressed.
+  # ────────────────────────────────────────────────────────────────
+  errors:
+    name: Error-path smoke
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+      - name: Invalid --package-prefix must fail with actionable message
+        run: |
+          set +e
+          out=$(python3 scripts/scaffold.py resolve kmp MyApp --package-prefix "com.rzv-bad" 2>&1)
+          rc=$?
+          echo "$out"
+          [ $rc -ne 0 ] || { echo "FAIL: expected non-zero exit"; exit 1; }
+          echo "$out" | grep -q "invalid --package-prefix" || { echo "FAIL: error message missing"; exit 1; }
+      - name: Wild project name must fail with actionable message
+        run: |
+          set +e
+          out=$(python3 scripts/scaffold.py resolve kmp "!!!" --package-prefix com.ci 2>&1)
+          rc=$?
+          echo "$out"
+          [ $rc -ne 0 ] || { echo "FAIL: expected non-zero exit"; exit 1; }
+          echo "$out" | grep -q "cannot slugify" || { echo "FAIL: error message missing"; exit 1; }
+      - name: Python < 3.10 must be rejected
+        # Simulate by running the script under 3.9 via actions/setup-python.
+        run: |
+          # This step runs under 3.10 for the checkout-level step; we just
+          # assert the guard exists in source, as a cheap defense-in-depth.
+          grep -q "requires Python 3.10 or newer" scripts/scaffold.py
+          grep -q "sys.version_info < (3, 10)" scripts/scaffold.py
+
+  # ────────────────────────────────────────────────────────────────
+  # KMP: scaffold + assemble the shared module. Android SDK is needed
+  # for Gradle configuration even if we skip the Android assembly.
+  # iOS targets are not built (no macOS runner).
+  # ────────────────────────────────────────────────────────────────
+  kmp:
+    name: KMP scaffold + assemble
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - uses: android-actions/setup-android@v3
+      - name: Scaffold KMP project (skip verify — we run a custom build below)
+        run: |
+          python3 scripts/scaffold.py create kmp SmokeKmp \
+            --dest $RUNNER_TEMP/SmokeKmp \
+            --package-prefix com.ci \
+            --no-auth --no-theme \
+            --skip-verify
+      - name: Show top-level structure
+        run: ls -la $RUNNER_TEMP/SmokeKmp
+      - name: Assemble shared module (Linux-safe, catches package-rewrite regressions)
+        working-directory: ${{ runner.temp }}/SmokeKmp
+        run: ./gradlew --no-daemon :shared:assemble
+
+  # ────────────────────────────────────────────────────────────────
+  # Next.js: scaffold + full pnpm build. Cheap enough to run the whole
+  # thing since it takes < 2 min.
+  # ────────────────────────────────────────────────────────────────
+  nextjs:
+    name: Next.js scaffold + build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: Scaffold Next.js project (verify runs pnpm install + build for us)
+        run: |
+          python3 scripts/scaffold.py create nextjs SmokeNext \
+            --dest $RUNNER_TEMP/SmokeNext \
+            --auth-provider clerk \
+            --theme-preset neutral

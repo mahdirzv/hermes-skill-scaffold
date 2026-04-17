@@ -1,5 +1,7 @@
 # scaffold-factory
 
+[![smoke](https://github.com/mahdirzv/scaffold-factory/actions/workflows/smoke.yml/badge.svg)](https://github.com/mahdirzv/scaffold-factory/actions/workflows/smoke.yml)
+
 Portable project-scaffolding skill for KMP and Next.js. Installable into any agent (Claude Code, OpenClaw, Hermes) with a single `git clone`.
 
 ## What it does
