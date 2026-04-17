@@ -1,0 +1,51 @@
+name: Bug report
+description: Something is broken or behaves unexpectedly.
+title: "bug: "
+labels: ["bug"]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+      description: Describe the actual behaviour. Paste error output if you have any.
+      placeholder: Running `scaffold.py create kmp MyApp --dest ./out` fails with…
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What did you expect to happen?
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Reproduction steps
+      description: Minimal, numbered steps. Include the exact commands and flags you ran.
+      placeholder: |
+        1. Run `…`
+        2. Observe `…`
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Version / tag
+      description: Output of the relevant version command (e.g. `scaffold.py --version`, `cat package.json | jq .version`, or the git tag you checked out).
+    validations:
+      required: true
+  - type: textarea
+    id: env
+    attributes:
+      label: Environment
+      description: OS, shell, language runtime versions (Python / Node / JDK), package manager versions. `uname -a`, `python3 --version`, `node --version`, `pnpm --version`, `java -version` as relevant.
+    validations:
+      required: false
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs / stack trace
+      description: Paste any relevant output. Use triple backticks for formatting.
+      render: shell
+    validations:
+      required: false
