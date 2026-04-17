@@ -57,14 +57,16 @@ Scaffolding is destructive on the target path and generates identifiers that are
    - Next.js: `--auth-provider clerk|supabase`? `--theme-preset neutral|vivid`?
 4. **Destination path** (`--dest`) — absolute path or sensible relative path. Confirm it doesn't collide with existing work.
 5. **Verification** — the script runs `./gradlew build` or `pnpm build` by default (takes a couple of minutes). Warn the user. Only pass `--skip-verify` if the user explicitly opts out.
+6. **Auth provider API keys** — if `--auth-provider clerk` or `supabase`, ask:
+   > *"Do you have your Clerk (or Supabase) keys ready? If yes, paste them and I'll wire them into `.env.local`. If not, I'll scaffold without keys and the app will show a 'configure <provider>' notice on the sign-in page until you add them."*
+   - Clerk keys → pass via `--clerk-publishable-key` and `--clerk-secret-key`.
+   - Supabase keys → pass via `--supabase-url` and `--supabase-anon-key`.
+   - Unset flags are silently omitted from `.env.local`; the starter's graceful-no-keys path activates.
+7. **Always verify with `pnpm dev` (Next.js) or `./gradlew :composeApp:run` (KMP) after the scaffold completes.** `pnpm build` alone does not exercise middleware/runtime; the full dev server + curl on `/`, `/sign-in`, `/dashboard` is what catches proxy and auth bugs.
 
 If any answer is ambiguous, **ask** — do not guess.
 
-After the scaffold succeeds, remind the user how to push to GitHub:
-```bash
-cd <dest>
-gh repo create <slug> --source . --push --private
-```
+The script prints a "Next steps" block to stderr after a successful scaffold — relay it to the user verbatim; it includes the exact `gh repo create` command for their project slug.
 
 ## Architecture
 

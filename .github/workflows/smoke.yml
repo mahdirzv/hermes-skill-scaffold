@@ -92,11 +92,13 @@ jobs:
         run: ./gradlew --no-daemon :shared:assemble
 
   # ────────────────────────────────────────────────────────────────
-  # Next.js: scaffold + full pnpm build. Cheap enough to run the whole
-  # thing since it takes < 2 min.
+  # Next.js: scaffold + build + runtime. `pnpm build` alone does not
+  # exercise middleware/proxy for dynamic routes, so we also run the
+  # production server and curl every route — that's what would have
+  # caught the proxy.ts location bug before v0.1.1.
   # ────────────────────────────────────────────────────────────────
   nextjs:
-    name: Next.js scaffold + build
+    name: Next.js scaffold + build + runtime
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -117,3 +119,39 @@ jobs:
             --dest $RUNNER_TEMP/SmokeNext \
             --auth-provider clerk \
             --theme-preset neutral
+      - name: Runtime smoke — boot pnpm start, curl every route
+        working-directory: ${{ runner.temp }}/SmokeNext
+        run: |
+          pnpm start > /tmp/next-start.log 2>&1 &
+          echo $! > /tmp/next-start.pid
+          # Wait up to 30s for port 3000 to accept connections
+          for i in $(seq 1 30); do
+            if curl -s -o /dev/null http://localhost:3000; then
+              echo "server up after ${i}s"
+              break
+            fi
+            sleep 1
+          done
+          set +e
+          declare -A expected
+          expected[/]=200
+          expected[/sign-in]=200
+          expected[/sign-up]=200
+          expected[/dashboard]=307
+          failed=0
+          for route in / /sign-in /sign-up /dashboard; do
+            code=$(curl -s -o /dev/null -w "%{http_code}" "http://localhost:3000${route}")
+            want=${expected[$route]}
+            if [ "$code" = "$want" ]; then
+              echo "PASS  $route → $code"
+            else
+              echo "FAIL  $route → got $code, expected $want"
+              failed=1
+            fi
+          done
+          kill "$(cat /tmp/next-start.pid)" 2>/dev/null || true
+          if [ "$failed" -ne 0 ]; then
+            echo "--- last 30 lines of server log ---"
+            tail -30 /tmp/next-start.log
+            exit 1
+          fi

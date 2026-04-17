@@ -27,10 +27,15 @@ $ scaffold.py create kmp PlateTracker --dest ./PlateTracker --package-prefix com
 Same flow for Next.js 16:
 
 ```bash
-$ scaffold.py create nextjs MyApp --dest ./MyApp --auth-provider clerk --theme-preset neutral
+$ scaffold.py create nextjs MyApp --dest ./MyApp \
+    --auth-provider clerk \
+    --clerk-publishable-key pk_test_... \
+    --clerk-secret-key sk_test_...
 ```
 
-Generates a minimal `.env.local` with `AUTH_PROVIDER=clerk`, runs `pnpm install` + `pnpm build`, done.
+Generates a minimal `.env.local` with the provider selection + any keys you passed, then runs `pnpm install && pnpm build && pnpm start` and curls every route (`/`, `/sign-in`, `/sign-up`, `/dashboard`) to prove runtime works, not just build. **If you skip the keys, the app still boots** — the starter's auth providers no-op gracefully and show a "configure <provider>" notice on the sign-in page until you fill `.env.local`.
+
+Same works for Supabase via `--supabase-url` / `--supabase-anon-key`.
 
 ## Why this exists
 
