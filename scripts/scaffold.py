@@ -37,7 +37,7 @@ import urllib.parse
 from pathlib import Path, PurePosixPath
 from typing import Any, NoReturn
 
-SCAFFOLD_VERSION = "0.4.1"
+SCAFFOLD_VERSION = "0.4.2"
 SCRIPT_DIR = Path(__file__).resolve().parent
 DEFAULT_REGISTRY = SCRIPT_DIR.parent / "references" / "registry.json"
 DEFAULT_CACHE = Path.home() / ".cache" / "scaffold-factory"
@@ -438,6 +438,41 @@ def read_starter_manifest(src: Path) -> dict[str, Any]:
         fail_starter(f"invalid .scaffold.json in {src}: {e}")
 
 
+def collect_post_scaffold_notes(manifest: dict[str, Any], selected_pack_keys: set[str]) -> dict[str, Any]:
+    """Gather starter-owned post-scaffold notes for the kept packs.
+
+    The starter's .scaffold.json may declare:
+      - `post_scaffold_notes.heading`: list[str] rendered once before per-pack notes
+      - `post_scaffold_notes.footer`:  list[str] rendered once after per-pack notes
+      - `packs.<key>.post_scaffold_note`: str rendered for each kept pack that has one
+
+    Returns {heading, footer, per_pack: [(key, note)]} preserving manifest
+    declaration order so output is stable. Returns an empty dict when no
+    selected pack has a note — callers can cheaply skip the section.
+
+    This lets scaffold.py stay stack-agnostic: the "reference modules need
+    manual wiring" text lives in the starter, not the scaffolder.
+    """
+    if not manifest:
+        return {}
+    packs = manifest.get("packs", {}) or {}
+    per_pack: list[tuple[str, str]] = []
+    for key, spec in packs.items():
+        if key not in selected_pack_keys:
+            continue
+        note = (spec or {}).get("post_scaffold_note")
+        if note:
+            per_pack.append((key, note))
+    if not per_pack:
+        return {}
+    notes_block = manifest.get("post_scaffold_notes", {}) or {}
+    return {
+        "heading": list(notes_block.get("heading") or []),
+        "footer":  list(notes_block.get("footer")  or []),
+        "per_pack": per_pack,
+    }
+
+
 def apply_starter_placeholders(dest: Path, manifest: dict[str, Any], values: dict[str, str]) -> dict[str, Any]:
     """Rewrite file CONTENTS and relocate files whose POSIX relpath contains a find string.
 
@@ -751,6 +786,9 @@ def apply_plan(
     changed_files = placeholder_stats["changed_files"]
     renamed_paths = placeholder_stats["renamed_paths"]
 
+    # Starter-owned post-scaffold notes (captured BEFORE the manifest is deleted)
+    post_notes = collect_post_scaffold_notes(manifest, selected_pack_keys) if manifest else {}
+
     # env_file generation (Next.js)
     env_written = apply_env_file(dest, manifest, plan["placeholder_map"]) if manifest else None
 
@@ -785,6 +823,7 @@ def apply_plan(
         "android_sdk": sdk_written,
         "verify_results": verify_results,
         "selected_packs": sorted(selected_pack_keys),
+        "post_scaffold_notes": post_notes,
     }
     if dry_run:
         result["dry_run"] = True
@@ -899,24 +938,19 @@ def print_next_steps(plan: dict[str, Any], result: dict[str, Any]) -> None:
         lines.append("  5. Push to GitHub (when ready):")
         lines.append(f"       cd {dest} && gh repo create {placeholders.get('project_slug', name.lower())} --source . --push --private")
 
-        # Optional pack caveat — the packs are shipped as reference modules,
-        # not wired dependencies. Warn explicitly so users don't expect
-        # plug-and-play behaviour. Tracked for full wiring in v0.5.0.
-        selected_packs: list[str] = list(result.get("selected_packs") or [])
-        reference_packs = [p for p in selected_packs if p in ("auth", "room", "ui_theme")]
-        if reference_packs:
-            lines.append("")
-            lines.append("⚠ Heads up: the following KMP packs are shipped as REFERENCE modules,")
-            lines.append("  not wired dependencies. composeApp/shared do not import from them yet.")
-            lines.append("  To use them, follow the wiring steps in the project's AGENTS.md:")
-            for pack in reference_packs:
-                if pack == "auth":
-                    lines.append("    kmp:auth       → register authModule in shared/src/.../di/Modules.kt")
-                elif pack == "room":
-                    lines.append("    kmp:room_data  → register dataModule in shared/src/.../di/Modules.kt")
-                elif pack == "ui_theme":
-                    lines.append("    kmp:ui_theme   → add implementation(projects.kmp.uiTheme) to composeApp")
-            lines.append("  Or remove them with --no-auth --no-theme (and skip --room) if unneeded.")
+    # Starter-owned post-scaffold notes. The starter's .scaffold.json declares
+    # heading/footer + a per-pack wiring hint; we just render what's there. No
+    # hardcoded pack names, no stack-specific strings in the scaffolder.
+    notes = result.get("post_scaffold_notes") or {}
+    per_pack = notes.get("per_pack") or []
+    if per_pack:
+        lines.append("")
+        for h in notes.get("heading") or []:
+            lines.append(h)
+        for _key, note in per_pack:
+            lines.append(note)
+        for f in notes.get("footer") or []:
+            lines.append(f)
 
     lines.append("")
     print("\n".join(lines), file=sys.stderr)

@@ -1,7 +1,7 @@
 {
-  "version": "0.4.1",
+  "version": "0.4.2",
   "min_scaffold_py_version": "0.1.0",
-  "_note": "v0.4.1: nextjs base bumped to v0.1.3 (call-time env guards, 44/44 tests pass). All verify commands use list form to avoid shell=True. Tags are immutable — safe to cache indefinitely.",
+  "_note": "v0.4.2: kmp base bumped to v0.1.2 (starter-owned post_scaffold_notes — per-pack wiring hints now declared in .scaffold.json, scaffold.py renders them verbatim). Tags are immutable — safe to cache indefinitely.",
   "stack_defaults": {
     "kmp": {
       "auth_provider": "clerk",
@@ -17,7 +17,7 @@
       "id": "kmp_base",
       "stack": "kmp",
       "kind": "base",
-      "source": "git+https://github.com/mahdirzv/kmp-starter-project@v0.1.1",
+      "source": "git+https://github.com/mahdirzv/kmp-starter-project@v0.1.2",
       "verify": [
         ["./gradlew", "--no-daemon", "build"]
       ]
