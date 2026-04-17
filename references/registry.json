@@ -1,5 +1,5 @@
 {
-  "version": "0.4.5",
+  "version": "0.4.6",
   "min_scaffold_py_version": "0.1.0",
   "_note": "v0.4.5: nextjs base bumped to v0.1.9 (Clerk catch-all routes for sign-in/sign-up — Clerk's hosted components probe sub-routes at runtime, so sign-in/[[...rest]]/page.tsx and sign-up/[[...rest]]/page.tsx are required to avoid 'not a catch-all route' errors under live Clerk dev keys). Includes v0.1.8 structural refactor (src/features, src/components/ui, src/lib/design). Tags are immutable — safe to cache indefinitely.",
   "stack_defaults": {

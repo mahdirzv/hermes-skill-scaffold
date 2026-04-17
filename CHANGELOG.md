@@ -4,6 +4,22 @@ All notable changes to scaffold-factory are documented here. Format loosely foll
 
 ## [Unreleased]
 
+## [0.4.6] — 2026-04-17
+
+Security hardening pass. No breaking API changes. 96 → 106 pytest tests.
+
+### Security
+- **Redact secret placeholder values from stdout JSON** in `resolve` and `create`. Before this release, `scaffold.py resolve ... --clerk-secret-key sk_live_X` serialized the full secret into the plan JSON printed to stdout — where it could leak into CI logs, shell history via `>`, or `tee`. Now those four keys (`clerk_publishable_key`, `clerk_secret_key`, `supabase_url`, `supabase_anon_key`) are replaced with `"[REDACTED]"` at the serialize-to-stdout boundary. In-memory plan passed to `apply_plan` keeps real values (so `.env.local` still gets written correctly); `--plan-out` also keeps real values (explicit user opt-in to persist).
+- **Path-traversal guard in `apply_starter_placeholders` rename pass.** A malicious or buggy `.scaffold.json` with `{"find": "src/", "replace_with": "../../etc/"}` — or a `replace_with` that expands via `{{…}}` to a value containing `..` — could previously silently move files outside `--dest`. Now: rejects any rename whose resulting path contains `..` segments OR whose resolved path is not a descendant of `dest.resolve()`. Exits `EXIT_STARTER` with a clear message.
+- **Skip symlinks in both rglob passes of `apply_starter_placeholders`.** A starter repo could track a symlink (`link → ~/.ssh/config`); the previous rewrite pass would `write_text` *through* the symlink, overwriting files outside the scaffold. Now every pass checks `path.is_symlink()` first.
+- **`shutil.copytree(..., symlinks=False)`.** Explicit: we copy what symlinks reference rather than preserving the symlinks themselves. Combined with the rglob guards, keeps every write confined to `--dest`.
+
+### Added
+- `tests/test_security.py` — 10 regression tests covering all three fixes (secret redaction matrix, path-traversal via `..`, path-traversal via placeholder-expansion, symlink content-rewrite skip, symlink rename skip, benign-rename still works).
+
+### Changed
+- `SCAFFOLD_VERSION`, `registry.json`, `plugin.json`, `marketplace.json` all bumped to 0.4.6.
+
 ## [0.4.5] — 2026-04-17
 
 Registry pin bump to consume the Next.js starter's Clerk catch-all route fix. scaffold.py logic unchanged.

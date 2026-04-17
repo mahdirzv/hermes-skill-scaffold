@@ -37,7 +37,7 @@ import urllib.parse
 from pathlib import Path, PurePosixPath
 from typing import Any, NoReturn
 
-SCAFFOLD_VERSION = "0.4.5"
+SCAFFOLD_VERSION = "0.4.6"
 SCRIPT_DIR = Path(__file__).resolve().parent
 DEFAULT_REGISTRY = SCRIPT_DIR.parent / "references" / "registry.json"
 DEFAULT_CACHE = Path.home() / ".cache" / "scaffold-factory"
@@ -58,6 +58,28 @@ _SECRET_FLAG_TABLE: tuple[tuple[str, str, str], ...] = (
     ("supabase_url",          "supabase_url",          "NEXT_PUBLIC_SUPABASE_URL"),
     ("supabase_anon_key",     "supabase_anon_key",     "NEXT_PUBLIC_SUPABASE_ANON_KEY"),
 )
+
+# Placeholder keys whose values must NEVER appear in stdout JSON. Secrets set
+# via flags or env fallback flow into plan["placeholder_map"]; without this
+# redaction a `scaffold.py resolve ... --clerk-secret-key sk_live_X` would print
+# the full secret to stdout and leak it into CI logs, shell history via `> out`,
+# or `tee`. The in-memory plan passed to apply_plan keeps real values — we
+# redact only at the serialize-to-stdout boundary.
+_REDACT_PLACEHOLDER_KEYS: frozenset[str] = frozenset(
+    placeholder for _flag, placeholder, _env in _SECRET_FLAG_TABLE
+)
+
+
+def _redact_plan_for_stdout(plan: dict[str, Any]) -> dict[str, Any]:
+    """Return a deep-enough copy of `plan` with secret placeholder values masked."""
+    pm = plan.get("placeholder_map")
+    if not isinstance(pm, dict):
+        return plan
+    redacted_pm = {
+        k: ("[REDACTED]" if k in _REDACT_PLACEHOLDER_KEYS and v else v)
+        for k, v in pm.items()
+    }
+    return {**plan, "placeholder_map": redacted_pm}
 
 # Exit code taxonomy. Lets callers (CI, wrapper scripts, humans) distinguish
 # retryable user-input errors from system errors, network failures, and starter
@@ -511,12 +533,17 @@ def apply_starter_placeholders(dest: Path, manifest: dict[str, Any], values: dic
                 text = text.replace(old, new)
         return text
 
+    # Resolve once for the containment check in Pass 2.
+    dest_resolved = dest.resolve()
+
     # ---- Pass 1: rewrite file contents ----
+    # Skip symlinks: we don't want to follow them and write *through* the link
+    # into something outside `dest` (e.g. a tracked `link -> ~/.ssh/config`).
     changed_files = 0
     for path in dest.rglob("*"):
         if any(part in SKIP_DIRS for part in path.parts):
             continue
-        if not path.is_file():
+        if path.is_symlink() or not path.is_file():
             continue
         try:
             original = path.read_text(encoding="utf-8")
@@ -528,17 +555,41 @@ def apply_starter_placeholders(dest: Path, manifest: dict[str, Any], values: dic
             changed_files += 1
 
     # ---- Pass 2: relocate files on full relpath match ----
+    # Guards (defence in depth, in order):
+    #   (a) skip symlinks
+    #   (b) reject any .. segment in the computed new path
+    #   (c) reject targets that resolve outside `dest`
+    # Any of these failing is a starter bug (malicious or misconfigured
+    # `.scaffold.json`), hence EXIT_STARTER.
     renamed_paths = 0
     relocations: list[tuple[Path, Path]] = []
     for path in dest.rglob("*"):
         if any(part in SKIP_DIRS for part in path.parts):
             continue
-        if not path.is_file():
+        if path.is_symlink() or not path.is_file():
             continue
         rel = path.relative_to(dest).as_posix()
         new_rel = replace_all(rel)
-        if new_rel != rel:
-            relocations.append((path, dest / new_rel))
+        if new_rel == rel:
+            continue
+        if ".." in PurePosixPath(new_rel).parts:
+            fail_starter(
+                f"placeholder rewrite produced a parent-traversal path: {rel!r} → {new_rel!r}. "
+                "Check .scaffold.json placeholders for `find`/`replace_with` pairs that yield `..` segments."
+            )
+        tgt = dest / new_rel
+        try:
+            tgt_resolved = tgt.resolve()
+        except OSError:
+            fail_starter(f"placeholder rewrite target could not be resolved: {tgt}")
+        try:
+            tgt_resolved.relative_to(dest_resolved)
+        except ValueError:
+            fail_starter(
+                f"placeholder rewrite would move file outside --dest: {rel!r} → {new_rel!r}. "
+                "Rejecting to prevent path-traversal."
+            )
+        relocations.append((path, tgt))
 
     for src, tgt in relocations:
         if tgt.exists():
@@ -655,7 +706,12 @@ def copy_tree(src: Path, dest: Path) -> None:
         fail_system(f"source path does not exist: {src}")
     if not src.is_dir():
         fail_system(f"source path is not a directory: {src}")
-    shutil.copytree(src, dest, dirs_exist_ok=True, ignore=ignore_fn)
+    # symlinks=False: do NOT preserve symlinks. Instead of copying them verbatim
+    # (which could point outside dest and enable path-traversal when Pass 1
+    # writes through them), copytree copies the file they reference. Combined
+    # with the is_symlink() skip in apply_starter_placeholders, this keeps all
+    # writes confined to `dest`.
+    shutil.copytree(src, dest, dirs_exist_ok=True, ignore=ignore_fn, symlinks=False)
 
 
 # ---------- verification ----------
@@ -985,7 +1041,10 @@ def main() -> int:
 
     if args.command == "resolve":
         plan = resolve_plan(args)
-        print(json.dumps(plan, indent=2, sort_keys=True))
+        # Redact secrets from stdout. Callers that need the real values should
+        # use `create` (which writes .env.local) or `--plan-out` (which writes
+        # to a user-specified file — that's an explicit opt-in to persist secrets).
+        print(json.dumps(_redact_plan_for_stdout(plan), indent=2, sort_keys=True))
         return 0
 
     if args.command == "apply":
@@ -1011,7 +1070,13 @@ def main() -> int:
             force=args.force, skip_verify=args.skip_verify,
             refresh_cache=args.refresh_cache, dry_run=args.dry_run,
         )
-        print(json.dumps({"plan": plan, "result": result}, indent=2, sort_keys=True))
+        # Redact secrets from stdout. `apply_plan` above already wrote them to
+        # .env.local using the real values, and `--plan-out` (above) persisted
+        # the unredacted plan for users who explicitly asked for it.
+        print(json.dumps(
+            {"plan": _redact_plan_for_stdout(plan), "result": result},
+            indent=2, sort_keys=True,
+        ))
         if not args.dry_run:
             print_next_steps(plan, result)
         else:
