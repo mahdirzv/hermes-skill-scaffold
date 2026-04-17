@@ -37,7 +37,7 @@ import urllib.parse
 from pathlib import Path, PurePosixPath
 from typing import Any, NoReturn
 
-SCAFFOLD_VERSION = "0.4.9"
+SCAFFOLD_VERSION = "0.4.10"
 SCRIPT_DIR = Path(__file__).resolve().parent
 DEFAULT_REGISTRY = SCRIPT_DIR.parent / "references" / "registry.json"
 DEFAULT_CACHE = Path.home() / ".cache" / "scaffold-factory"
@@ -683,6 +683,97 @@ def prune_unselected_packs(dest: Path, manifest: dict[str, Any], selected_pack_k
     return removed
 
 
+def apply_remove_on_scaffold(dest: Path, manifest: dict[str, Any]) -> list[str]:
+    """Delete starter-identity files (LICENSE, starter README, SECURITY.md, …)
+    after copy. The starter's `.scaffold.json` declares:
+
+        "remove_on_scaffold": ["LICENSE", "README.md", "SECURITY.md"]
+
+    Lets a starter distinguish "files we want to ship to consumer projects"
+    (AGENTS.md, .env.example, src/) from "files that identify the starter
+    itself" (LICENSE attribution, starter-specific README, SECURITY policy
+    pointing at the starter maintainer). Missing paths are silently skipped
+    — lets starters evolve the list without forcing consumers to upgrade.
+
+    Paths are validated to stay inside dest — defense-in-depth, same as the
+    placeholder rename pass. Rejects `..` segments and outside-dest targets.
+
+    Returns the list of paths actually removed (for the apply_plan result).
+    """
+    removed: list[str] = []
+    paths = manifest.get("remove_on_scaffold", []) or []
+    if not paths:
+        return removed
+    dest_resolved = dest.resolve()
+    for rel in paths:
+        if not isinstance(rel, str) or not rel:
+            continue
+        if ".." in PurePosixPath(rel).parts:
+            fail_starter(
+                f"remove_on_scaffold path contains `..`: {rel!r}. Rejecting."
+            )
+        target = dest / rel
+        if not target.exists():
+            continue  # silently skip — declared but not present on this scaffold
+        try:
+            target_resolved = target.resolve()
+            target_resolved.relative_to(dest_resolved)
+        except (OSError, ValueError):
+            fail_starter(
+                f"remove_on_scaffold path resolves outside --dest: {rel!r}"
+            )
+        if target.is_dir() and not target.is_symlink():
+            shutil.rmtree(target)
+        else:
+            target.unlink()
+        removed.append(rel)
+    return removed
+
+
+def apply_readme_template(dest: Path, manifest: dict[str, Any], values: dict[str, str]) -> str | None:
+    """Write a project-specific README from the starter's `generate_readme`
+    template, if declared. Meant to pair with `remove_on_scaffold: [README.md]`
+    so the scaffold output gets a README about the *user's* project rather
+    than the starter.
+
+    Manifest shape (either form supported):
+
+        "generate_readme": "# {{project_name}}\\n\\n…"            # plain string
+
+        "generate_readme": {                                      # object form
+          "output": "README.md",                                  # optional, default README.md
+          "content": "# {{project_name}}\\n\\n…"
+        }
+
+    `{{placeholder}}` tokens expand via the same engine as other files, so
+    the template can reference `project_name`, `project_slug`, etc.
+
+    Returns the relative output path written, or None if no template declared.
+    """
+    spec = manifest.get("generate_readme")
+    if not spec:
+        return None
+    if isinstance(spec, dict):
+        content = spec.get("content", "")
+        output = spec.get("output", "README.md")
+    else:
+        content = str(spec)
+        output = "README.md"
+    if not content:
+        return None
+    if ".." in PurePosixPath(output).parts:
+        fail_starter(f"generate_readme output path contains `..`: {output!r}")
+    out_path = dest / output
+    dest_resolved = dest.resolve()
+    try:
+        out_path.resolve().relative_to(dest_resolved)
+    except (OSError, ValueError):
+        fail_starter(f"generate_readme output path resolves outside --dest: {output!r}")
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+    out_path.write_text(placeholder_expand(content, values), encoding="utf-8")
+    return str(out_path.relative_to(dest))
+
+
 def apply_env_file(dest: Path, manifest: dict[str, Any], values: dict[str, str]) -> str | None:
     """Write a MINIMAL env file containing only the scaffold's declared overrides.
 
@@ -875,6 +966,14 @@ def apply_plan(
         # Starter-owned post-scaffold notes (captured BEFORE the manifest is deleted)
         post_notes = collect_post_scaffold_notes(manifest, selected_pack_keys) if manifest else {}
 
+        # Remove starter-identity files (LICENSE, starter README, SECURITY.md, …)
+        # declared in manifest.remove_on_scaffold, then optionally overwrite
+        # with a project-specific README from the `generate_readme` template.
+        # Order matters: remove first, generate second — so a generated
+        # README.md cleanly replaces any removed one.
+        removed_identity_files = apply_remove_on_scaffold(dest, manifest) if manifest else []
+        readme_generated = apply_readme_template(dest, manifest, plan["placeholder_map"]) if manifest else None
+
         # env_file generation (Next.js)
         env_written = apply_env_file(dest, manifest, plan["placeholder_map"]) if manifest else None
 
@@ -905,6 +1004,8 @@ def apply_plan(
             "renamed_paths": renamed_paths,
             "placeholder_match_counts": placeholder_stats["match_counts"],
             "removed_packs": removed,
+            "removed_identity_files": removed_identity_files,
+            "readme_generated": readme_generated,
             "env_file": env_written,
             "android_sdk": sdk_written,
             "verify_results": verify_results,

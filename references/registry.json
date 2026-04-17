@@ -1,5 +1,5 @@
 {
-  "version": "0.4.9",
+  "version": "0.4.10",
   "min_scaffold_py_version": "0.1.0",
   "_note": "v0.4.9: nextjs base → v0.1.11 (conditional ClerkProvider — RootLayout dynamic-imports @clerk/nextjs only when AUTH_PROVIDER=clerk AND key present, so supabase/firebase/custom bundles no longer pay the Clerk cost). Tags are immutable — safe to cache indefinitely.",
   "stack_defaults": {

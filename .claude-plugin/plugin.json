@@ -1,6 +1,6 @@
 {
   "name": "scaffold-factory",
-  "version": "0.4.9",
+  "version": "0.4.10",
   "description": "Scaffold KMP or Next.js projects from canonical GitHub starter repos. Never rewrites project structure with an LLM.",
   "author": {
     "name": "mahdirzv",

@@ -4,6 +4,19 @@ All notable changes to scaffold-factory are documented here. Format loosely foll
 
 ## [Unreleased]
 
+## [0.4.10] — 2026-04-18
+
+Starter-identity file handling. Fixes a real-world bug where scaffolded projects inherited the starter's `LICENSE` (attributing the user's project to `mahdirzv`), `README.md` (titled "Base Next.js Starter"), and `SECURITY.md` (pointing at the starter maintainer's advisory URL). Backwards-compatible: starters opt in by declaring the new manifest keys.
+
+### Added
+- **`.scaffold.json` → `remove_on_scaffold: string[]`** — list of paths relative to `dest` to delete after copy. Typical use: `["LICENSE", "README.md", "SECURITY.md"]`. Missing paths are silently skipped so starters can evolve the list without forcing users to upgrade. Paths are validated — rejects `..` segments and targets that resolve outside `--dest` (same policy as placeholder rename pass).
+- **`.scaffold.json` → `generate_readme`** — writes a project-specific README at scaffold time. Accepts either a plain string (`"# {{project_name}}\n\n…"` → written to `README.md`) or object form (`{ "output": "README.md", "content": "…" }`). `{{placeholder}}` tokens expand via the same engine as other files. Runs AFTER `remove_on_scaffold`, so `remove_on_scaffold: ["README.md"] + generate_readme: "…"` cleanly replaces the starter's README with a consumer-facing one.
+- 13 new pytest cases covering: list deletion, missing-path skip, directory deletion, empty/missing-key no-op, parent-traversal rejection, string-form README, object-form with custom output, placeholder expansion, output-path traversal rejection, and the remove+generate integration flow.
+
+### Changed
+- `apply_plan` result dict gets two new fields: `removed_identity_files` (list of paths actually deleted) and `readme_generated` (relative output path or null).
+- `SCAFFOLD_VERSION`, `registry.json`, `plugin.json`, `marketplace.json` all bumped to 0.4.10.
+
 ## [0.4.9] — 2026-04-18
 
 Pin bump to consume base-next-starter v0.1.11 (conditional ClerkProvider — non-clerk bundles no longer include `@clerk/nextjs`). No scaffold.py logic changes; 115 pytest tests still pass.
