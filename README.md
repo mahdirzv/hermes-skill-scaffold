@@ -47,7 +47,7 @@ scaffold-factory flips that: **the LLM routes, a Python script executes**. The s
 - **Pinned sources.** `v0.1.0` of a starter today is `v0.1.0` next year.
 - **Build-gated by default.** A scaffold isn't done until `./gradlew build` or `pnpm build` passes.
 - **Self-describing starters.** Each starter declares its own placeholders and packs via `.scaffold.json` — swap in your own starter without touching scaffold-factory.
-- **Portable.** One `git clone` installs the skill into any agent's skills directory.
+- **Portable.** Install as a Claude Code plugin (`/plugin install scaffold-factory`) with automatic updates; or clone into any skills directory as a fallback.
 
 ## Who this is for
 
@@ -59,17 +59,38 @@ If you start one Next.js app a year, `create-next-app` is fine. If you start fiv
 
 ## Install
 
+**Recommended — Claude Code plugin (auto-updates, marketplace-aware):**
+
 ```bash
-git clone https://github.com/mahdirzv/scaffold-factory ~/.claude/skills/scaffold-factory
+claude plugin marketplace add mahdirzv/scaffold-factory
+claude plugin install scaffold-factory
 ```
 
-Any agent that loads skills from `~/.claude/skills/` (or equivalent) picks it up automatically. Trigger by asking:
+Future updates: `claude plugin update scaffold-factory`.
+
+Once installed, trigger by asking the agent:
 
 > *"scaffold a KMP project called PlateTracker, package prefix com.rzv, with Room"*
 >
 > *"create a Next.js starter named MyApp with Clerk auth"*
 
-The agent will confirm your package prefix, pack selection, and destination path before running (see [`SKILL.md`](SKILL.md) — it's instructed not to silently default).
+Or use the slash command directly:
+
+```
+/scaffold nextjs MyApp --auth-provider clerk --clerk-publishable-key pk_test_... --clerk-secret-key sk_test_...
+```
+
+The agent confirms your package prefix, pack selection, destination, and API keys before running (see [`SKILL.md`](SKILL.md) — it's instructed not to silently default).
+
+**Fallback — manual clone (no auto-updates):**
+
+```bash
+git clone https://github.com/mahdirzv/scaffold-factory ~/.claude/skills/scaffold-factory
+```
+
+Use this if you're not using Claude Code's plugin system. You'll need to `git pull` manually to get new releases.
+
+> **Already have a git-clone install?** Either keep using it or `rm -rf ~/.claude/skills/scaffold-factory` before installing the plugin. Having both active at once can cause duplicate-skill routing.
 
 ## Requirements
 

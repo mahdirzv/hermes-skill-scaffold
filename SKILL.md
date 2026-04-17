@@ -1,5 +1,5 @@
 ---
-name: project-scaffold-factory
+name: scaffold-factory
 description: Scaffold new KMP or Next.js projects from canonical GitHub starter repos plus optional packs (auth, UI/theming, Room, CI, GitHub). Use when the user asks to create a new KMP or Next.js project, bootstrap an app from a starter, or generate a ready-to-build project. Never invents architecture — shallow-clones pinned starter tags and applies deterministic find/replace substitution declared by the starter's own .scaffold.json manifest.
 ---
 

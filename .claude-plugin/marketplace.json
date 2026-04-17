@@ -1,0 +1,21 @@
+{
+  "name": "mahdirzv",
+  "owner": {
+    "name": "mahdirzv",
+    "url": "https://github.com/mahdirzv"
+  },
+  "metadata": {
+    "description": "mahdirzv's Claude Code plugins",
+    "version": "0.1.0"
+  },
+  "plugins": [
+    {
+      "name": "scaffold-factory",
+      "source": "./",
+      "version": "0.3.0",
+      "description": "Scaffold KMP or Next.js projects deterministically from pinned GitHub starter repos. Never rewrites project structure with an LLM.",
+      "homepage": "https://github.com/mahdirzv/scaffold-factory",
+      "keywords": ["scaffolding", "kotlin-multiplatform", "kmp", "nextjs", "ai-agents", "starter-template"]
+    }
+  ]
+}

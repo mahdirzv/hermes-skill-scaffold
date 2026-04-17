@@ -6,6 +6,23 @@ All notable changes to scaffold-factory are documented here. Format loosely foll
 
 _No unreleased changes._
 
+## [0.3.0] — 2026-04-17
+
+Distribution milestone. scaffold-factory is now a first-class Claude Code plugin installable via `claude plugin install` with native version updates.
+
+### Added
+- **`.claude-plugin/plugin.json`** — plugin manifest declaring the skill (via `"skills": ["./"]` pointing at repo root) and the new `/scaffold` slash command. No file restructure needed; the existing flat layout works as-is.
+- **`.claude-plugin/marketplace.json`** — self-hosted single-plugin marketplace so users can `claude plugin marketplace add mahdirzv/scaffold-factory` and then `claude plugin install scaffold-factory`.
+- **`commands/scaffold.md`** — explicit `/scaffold <stack> <name> [flags]` slash-command wrapper. Mirrors the skill's pre-flight checklist and flag set; for users who know exactly what they want without natural-language dispatch.
+
+### Changed
+- **`SKILL.md` frontmatter `name`:** `project-scaffold-factory` → `scaffold-factory`. Idiomatic `plugin:skill` = `scaffold-factory:scaffold-factory`, matching the Claude Code convention (`code-review:code-review`, `feature-dev:feature-dev`).
+- **`README.md` install section:** plugin install is now the recommended path; `git clone` is documented as a fallback. Added a note warning against having both active at once.
+
+### Backward compat
+- Existing `git clone … ~/.claude/skills/scaffold-factory` users are unaffected. The plugin system installs to a separate cache (`~/.claude/plugins/cache/`) and does not interfere with skills directories.
+- `scripts/scaffold.py`, `references/registry.json`, and CI are all unchanged — same runtime behaviour, only the distribution + invocation layer changed.
+
 ## [0.2.0] — 2026-04-17
 
 Runtime-reliability milestone. `pnpm build` in CI was not enough — this release closes the gap.
@@ -62,7 +79,8 @@ First release. Single-skill consolidation + git+-pinned source resolution + subt
 - [mahdirzv/kmp-starter-project@v0.1.0](https://github.com/mahdirzv/kmp-starter-project/releases/tag/v0.1.0)
 - [mahdirzv/base-next-starter@v0.1.0](https://github.com/mahdirzv/base-next-starter/releases/tag/v0.1.0)
 
-[Unreleased]: https://github.com/mahdirzv/scaffold-factory/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/mahdirzv/scaffold-factory/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/mahdirzv/scaffold-factory/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/mahdirzv/scaffold-factory/compare/v0.1.1...v0.2.0
 [0.1.1]: https://github.com/mahdirzv/scaffold-factory/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/mahdirzv/scaffold-factory/releases/tag/v0.1.0
