@@ -4,6 +4,21 @@ All notable changes to scaffold-factory are documented here. Format loosely foll
 
 ## [Unreleased]
 
+## [0.4.3] — 2026-04-17
+
+Registry pin bump to consume the Next.js starter's senior-audit fixes. scaffold.py logic unchanged.
+
+### Changed
+- **Registry pin** `base-next-starter@v0.1.3` → `@v0.1.4`. v0.1.4 ships the "round out the core" audit wave:
+  - Root `src/proxy.ts` now dispatches through `@/modules/auth` (was hardcoded if/else between clerk and supabase); firebase/custom get real proxy stubs so the abstraction no longer leaks.
+  - Vestigial `middleware(req)` method removed from `AuthServerOps` (it was a no-op in every real provider).
+  - `AuthProviderName` single-sourced from `@/config`; all `process.env.AUTH_PROVIDER ?? 'clerk'` sites replaced with typed `config.auth.provider`.
+  - New route boundaries: `app/error.tsx`, `app/not-found.tsx`, `app/loading.tsx`.
+  - `globals.css` `@theme inline { var: var }` circular no-op deleted.
+  - Zod env validation in `@/config` — typos in `AUTH_PROVIDER`/`THEME_PRESET` fail loudly at boot.
+  - Starter tests: 44 → 46 passing.
+- `SCAFFOLD_VERSION`, `registry.json` version, `plugin.json`, `marketplace.json` all bumped to 0.4.3.
+
 ## [0.4.2] — 2026-04-17
 
 Starter-owned post-scaffold notes. The "reference modules need manual wiring" message now lives in each starter's `.scaffold.json` instead of being hardcoded per-pack in scaffold.py. Adding a new KMP pack no longer requires a scaffold-factory release.
