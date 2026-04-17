@@ -1,7 +1,7 @@
 {
   "version": "0.4.3",
   "min_scaffold_py_version": "0.1.0",
-  "_note": "v0.4.3: nextjs base bumped to v0.1.4 (round-out-the-core audit fixes: proxy rewired through @/modules/auth; AuthProviderName single-sourced from @/config; error.tsx + not-found.tsx + loading.tsx route boundaries; zod env validation). Tags are immutable — safe to cache indefinitely.",
+  "_note": "v0.4.3: nextjs base bumped to v0.1.5 (round-out-the-core audit fixes + error.tsx sentinel-rethrow follow-up: proxy rewired through @/modules/auth; AuthProviderName single-sourced from @/config; error.tsx + not-found.tsx + loading.tsx route boundaries; error.tsx now re-throws NEXT_REDIRECT / NEXT_NOT_FOUND so Next.js handles them upstream; zod env validation). Tags are immutable — safe to cache indefinitely.",
   "stack_defaults": {
     "kmp": {
       "auth_provider": "clerk",
@@ -46,7 +46,7 @@
       "id": "nextjs_base",
       "stack": "nextjs",
       "kind": "base",
-      "source": "git+https://github.com/mahdirzv/base-next-starter@v0.1.4",
+      "source": "git+https://github.com/mahdirzv/base-next-starter@v0.1.5",
       "verify": [
         [
           "pnpm",

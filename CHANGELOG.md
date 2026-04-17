@@ -9,11 +9,11 @@ All notable changes to scaffold-factory are documented here. Format loosely foll
 Registry pin bump to consume the Next.js starter's senior-audit fixes. scaffold.py logic unchanged.
 
 ### Changed
-- **Registry pin** `base-next-starter@v0.1.3` → `@v0.1.4`. v0.1.4 ships the "round out the core" audit wave:
+- **Registry pin** `base-next-starter@v0.1.3` → `@v0.1.5`. Ships the "round out the core" audit wave (v0.1.4) plus a same-day sentinel-rethrow follow-up (v0.1.5):
   - Root `src/proxy.ts` now dispatches through `@/modules/auth` (was hardcoded if/else between clerk and supabase); firebase/custom get real proxy stubs so the abstraction no longer leaks.
   - Vestigial `middleware(req)` method removed from `AuthServerOps` (it was a no-op in every real provider).
   - `AuthProviderName` single-sourced from `@/config`; all `process.env.AUTH_PROVIDER ?? 'clerk'` sites replaced with typed `config.auth.provider`.
-  - New route boundaries: `app/error.tsx`, `app/not-found.tsx`, `app/loading.tsx`.
+  - New route boundaries: `app/error.tsx`, `app/not-found.tsx`, `app/loading.tsx`. `error.tsx` re-throws framework sentinel errors (`NEXT_REDIRECT`, `NEXT_NOT_FOUND`) so Next.js handles them upstream — without this, `redirect('/sign-in')` inside a protected page would render the error UI (200) instead of redirecting (307). Caught by scaffold-factory's runtime smoke.
   - `globals.css` `@theme inline { var: var }` circular no-op deleted.
   - Zod env validation in `@/config` — typos in `AUTH_PROVIDER`/`THEME_PRESET` fail loudly at boot.
   - Starter tests: 44 → 46 passing.
