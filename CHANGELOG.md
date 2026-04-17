@@ -4,6 +4,18 @@ All notable changes to scaffold-factory are documented here. Format loosely foll
 
 ## [Unreleased]
 
+## [0.4.8] — 2026-04-18
+
+Forward-compat and cleanup-on-failure. scaffold.py hardening, no pin change. 106 → 115 pytest tests.
+
+### Added
+- **`.scaffold.json` schema version gate.** `read_starter_manifest` now reads `scaffold_schema_version` and fails with `EXIT_STARTER` if the value isn't in the supported set. Missing field defaults to `"1"` (backwards-compat with starters predating this check). Prevents silent misbehavior when a future v2 schema ships with different field semantics.
+- **Verify-fail cleanup.** When `run_verify` (or any other step inside `apply_plan`) fails via `SystemExit`, we now `rmtree(dest, ignore_errors=True)` — but only if *we* created the dest this invocation. A pre-existing dest the user pointed `--dest` at (even with `--force`) is never removed. Before this fix, `pnpm build` failure left a half-scaffolded project on disk and subsequent runs hit "destination already exists and is not empty."
+- `tests/test_schema_version_gate.py` (6 tests) + `tests/test_verify_fail_cleanup.py` (3 tests): covers missing field defaults to v1, explicit v1 accepted, v2 rejected, numeric coerced-and-rejected, absent manifest returns {}, supported-set is a frozenset; cleanup on verify failure, preservation of pre-existing dest with --force, successful scaffold leaves dest intact.
+
+### Changed
+- `SCAFFOLD_VERSION`, `registry.json`, `plugin.json`, `marketplace.json` all bumped to 0.4.8.
+
 ## [0.4.7] — 2026-04-18
 
 Pin bump to consume the hardening wave shipped alongside scaffold-factory v0.4.6. No scaffold.py logic changes; 106 pytest tests still pass.
