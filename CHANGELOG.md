@@ -4,6 +4,20 @@ All notable changes to scaffold-factory are documented here. Format loosely foll
 
 ## [Unreleased]
 
+## [0.4.2] — 2026-04-17
+
+Starter-owned post-scaffold notes. The "reference modules need manual wiring" message now lives in each starter's `.scaffold.json` instead of being hardcoded per-pack in scaffold.py. Adding a new KMP pack no longer requires a scaffold-factory release.
+
+### Added
+- New helper `collect_post_scaffold_notes(manifest, selected_pack_keys)` reads `post_scaffold_notes.heading` / `.footer` and per-pack `packs.<key>.post_scaffold_note` from the starter manifest, preserving manifest declaration order. Returns an empty dict when no selected pack has a note, so callers cheaply skip the section.
+- `apply_plan` result now carries `post_scaffold_notes: {heading, footer, per_pack}` so `print_next_steps` can render without re-reading the manifest (already deleted from dest by that point).
+- 10 new pytest cases: empty-manifest, no-selected-packs, selected-without-note, order preservation, missing-heading-defaults, print_next_steps integration (heading/footer/per-pack ordering), backwards-compat when the key is absent.
+
+### Changed
+- **Registry pin** `kmp-starter-project@v0.1.1` → `@v0.1.2`. v0.1.2 declares the new `post_scaffold_notes` + per-pack notes.
+- **scaffold.py `print_next_steps()` is stack-agnostic.** Hardcoded `if pack == "auth" / "room" / "ui_theme":` block deleted. Output is identical for existing KMP scaffolds (same heading, same per-pack lines, same footer) — they just come from the starter now.
+- `SCAFFOLD_VERSION`, `registry.json` version, `plugin.json`, `marketplace.json` all bumped to 0.4.2.
+
 ## [0.4.1] — 2026-04-17
 
 Hardening wave. Structured exit codes, dry-run preview, env-var fallback for secrets, 86-test pytest suite + CI job, registry pin bump to a bug-free Next.js starter. No breaking changes.
