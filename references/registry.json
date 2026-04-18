@@ -1,7 +1,7 @@
 {
-  "version": "0.4.10",
+  "version": "0.4.11",
   "min_scaffold_py_version": "0.1.0",
-  "_note": "v0.4.9: nextjs base → v0.1.11 (conditional ClerkProvider — RootLayout dynamic-imports @clerk/nextjs only when AUTH_PROVIDER=clerk AND key present, so supabase/firebase/custom bundles no longer pay the Clerk cost). Tags are immutable — safe to cache indefinitely.",
+  "_note": "v0.4.11: nextjs base → v0.1.12, kmp base → v0.1.4. Starter-identity files (LICENSE, README.md, SECURITY.md) are no longer copied verbatim into scaffolded projects — starters declare remove_on_scaffold + generate_readme in .scaffold.json, so consumer projects get a project-specific README with {{project_name}} expanded instead of inheriting the starter's attribution. Tags are immutable — safe to cache indefinitely.",
   "stack_defaults": {
     "kmp": {
       "auth_provider": "clerk",
@@ -17,7 +17,7 @@
       "id": "kmp_base",
       "stack": "kmp",
       "kind": "base",
-      "source": "git+https://github.com/mahdirzv/kmp-starter-project@v0.1.3",
+      "source": "git+https://github.com/mahdirzv/kmp-starter-project@v0.1.4",
       "verify": [
         ["./gradlew", "--no-daemon", "build"]
       ]
@@ -46,7 +46,7 @@
       "id": "nextjs_base",
       "stack": "nextjs",
       "kind": "base",
-      "source": "git+https://github.com/mahdirzv/base-next-starter@v0.1.11",
+      "source": "git+https://github.com/mahdirzv/base-next-starter@v0.1.12",
       "verify": [
         [
           "pnpm",

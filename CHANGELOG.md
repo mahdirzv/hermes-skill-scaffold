@@ -4,6 +4,15 @@ All notable changes to scaffold-factory are documented here. Format loosely foll
 
 ## [Unreleased]
 
+## [0.4.11] — 2026-04-18
+
+Pin bump consuming base-next-starter v0.1.12 + kmp-starter-project v0.1.4. Both starters now declare `remove_on_scaffold` + `generate_readme` in their manifests — fixes the starter-identity leak where every scaffolded project shipped with the starter author's `LICENSE`, the "Base Next.js Starter" `README.md`, and a `SECURITY.md` pointing at the starter maintainer's advisory URL.
+
+### Changed
+- **Registry pin** `base-next-starter@v0.1.11` → `@v0.1.12`. v0.1.12 declares `remove_on_scaffold: ["LICENSE", "README.md", "SECURITY.md"]` and a `generate_readme` template that produces a project-specific README with `{{project_name}}`/`{{auth_provider}}`/`{{theme_preset}}` + a pointer to `AGENTS.md`.
+- **Registry pin** `kmp-starter-project@v0.1.3` → `@v0.1.4`. v0.1.4 declares the same three files for removal and a KMP-appropriate `generate_readme` listing the three build targets (Desktop/Android/iOS) and resolved project identifiers.
+- `SCAFFOLD_VERSION`, `registry.json`, `plugin.json`, `marketplace.json` all bumped to 0.4.11.
+
 ## [0.4.10] — 2026-04-18
 
 Starter-identity file handling. Fixes a real-world bug where scaffolded projects inherited the starter's `LICENSE` (attributing the user's project to `mahdirzv`), `README.md` (titled "Base Next.js Starter"), and `SECURITY.md` (pointing at the starter maintainer's advisory URL). Backwards-compatible: starters opt in by declaring the new manifest keys.

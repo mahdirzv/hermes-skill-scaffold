@@ -12,7 +12,7 @@
     {
       "name": "scaffold-factory",
       "source": "./",
-      "version": "0.4.10",
+      "version": "0.4.11",
       "description": "Scaffold KMP or Next.js projects deterministically from pinned GitHub starter repos. Never rewrites project structure with an LLM.",
       "homepage": "https://github.com/mahdirzv/scaffold-factory",
       "keywords": ["scaffolding", "kotlin-multiplatform", "kmp", "nextjs", "ai-agents", "starter-template"]
